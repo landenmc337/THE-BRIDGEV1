@@ -43,19 +43,21 @@ this.wss = new WebSocket.Server({
 
         this.on("message", (data) => {
 
-            const payload = JSON.stringify(data);
+    console.log("📤 Broadcasting:", data);
 
-            this.wss.clients.forEach((client) => {
+    const payload = JSON.stringify(data);
 
-                if (client.readyState === WebSocket.OPEN) {
-                    client.send(payload);
-                }
+    this.wss.clients.forEach((client) => {
 
-            });
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(payload);
+        }
 
-        });
+    });
 
-    }
+});
+
+}
 
     send(data) {
 
