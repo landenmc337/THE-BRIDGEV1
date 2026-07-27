@@ -1,0 +1,173 @@
+:root{
+    --chat-font:"Open Sans", sans-serif;
+
+    --chat-font-size:35px;
+
+    --badge-size:28px;
+    --platform-size:28px;
+    --emote-size:42px;
+
+    --text-color:#ffffff;
+    --message-color:#ffffff;
+    --username-color:inherit;
+
+    --username-weight:700;
+    --message-weight:600;
+
+    --bubble-color:#232323;
+    --bubble-radius:20px;
+    --bubble-padding-y:14px;
+    --bubble-padding-x:18px;
+
+    --bubble-shadow:0 8px 20px rgba(0,0,0,.35);
+    --bubble-border:0;
+    --bubble-opacity:1;
+    --bubble-blur:0px;
+
+    --shadow-color:#000000;
+    --shadow-blur:10px;
+
+    --chat-gap:10px;
+    --chat-width:900px;
+    --chat-left:20px;
+    --chat-bottom:20px;
+
+    --animation-speed:.25s;
+    --animation-distance:12px;
+
+    --username-background:transparent;
+    --username-pill-padding-y:4px;
+    --username-pill-padding-x:14px;
+    --username-pill-radius:999px;
+
+    --message-gap:8px;
+    --bubble-gap:8px;
+
+    --show-platform-icons:true;
+    --show-badges:true;
+}
+
+body{
+    margin:0;
+    overflow:hidden;
+    background:transparent;
+    font-family:var(--chat-font);
+}
+
+#chat{
+    position:fixed;
+    left:var(--chat-left);
+    bottom:var(--chat-bottom);
+
+    display:flex;
+    flex-direction:column;
+    gap:var(--chat-gap);
+
+    width:var(--chat-width);
+}
+
+.message{
+    animation:fadeIn var(--animation-speed) ease;
+}
+
+@keyframes fadeIn{
+    from{
+        opacity:0;
+        transform:translateY(var(--animation-distance));
+    }
+
+    to{
+        opacity:1;
+        transform:translateY(0);
+    }
+}
+
+.message-row{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:var(--message-gap);
+
+    font-size:var(--chat-font-size);
+    color:var(--text-color);
+
+    text-shadow:0 0 var(--shadow-blur) var(--shadow-color);
+}
+
+.platform-icon{
+    width:var(--platform-size);
+    height:var(--platform-size);
+}
+
+.badges{
+    display:flex;
+    gap:4px;
+}
+
+.badge{
+    width:var(--badge-size);
+    height:var(--badge-size);
+}
+
+.username{
+    font-weight:var(--username-weight);
+    color:var(--username-color);
+}
+
+.username-pill{
+    padding:var(--username-pill-padding-y) var(--username-pill-padding-x);
+    border-radius:var(--username-pill-radius);
+    background:var(--username-background);
+    color:#fff;
+    font-weight:700;
+}
+
+.text{
+    font-weight:var(--message-weight);
+    color:var(--message-color);
+}
+
+.text img{
+    width:var(--emote-size);
+    height:var(--emote-size);
+    vertical-align:middle;
+}
+
+.bubble{
+    display:inline-flex;
+    flex-direction:column;
+    gap:var(--bubble-gap);
+
+    padding:var(--bubble-padding-y) var(--bubble-padding-x);
+
+    border-radius:var(--bubble-radius);
+
+    background:rgb(from var(--bubble-color) r g b / var(--bubble-opacity));
+    backdrop-filter:blur(var(--bubble-blur));
+
+    box-shadow:var(--bubble-shadow);
+    border:var(--bubble-border);
+}
+
+.bubble-text{
+    line-height:1.4;
+}
+
+.glass{
+    display:inline-flex;
+    flex-direction:column;
+    gap:8px;
+
+    padding:var(--bubble-padding-y) var(--bubble-padding-x);
+
+    border-radius:var(--bubble-radius);
+
+    background:rgba(255,255,255,.08);
+    backdrop-filter:blur(16px);
+
+    border:1px solid rgba(255,255,255,.15);
+}
+
+.compact{
+    gap:5px;
+}

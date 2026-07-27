@@ -1,3 +1,5 @@
+const express = require("express");
+const path = require("path");
 const EventEmitter = require("events");
 const WebSocket = require("ws");
 const http = require("http");
@@ -13,17 +15,30 @@ class Bridge extends EventEmitter {
 
         const PORT = process.env.PORT || 3000;
 
-const server = http.createServer((req, res) => {
-    res.writeHead(200);
-    res.end("RelayIt Bridge Running");
+const app = express();
+
+// Serve files from the ChatBridge folder
+app.use(express.static(__dirname));
+
+// Test route
+app.get("/test", (req, res) => {
+    res.send("Express is working!");
 });
 
+// Overlay route
+app.get("/", (req, res) => {
+    console.log("GET /");
+    res.sendFile(path.join(__dirname, "overlay.html"));
+});
+
+const server = http.createServer(app);
+
+// Attach WebSocket to the same server
+this.wss = new WebSocket.Server({ server });
+
+// Start the server
 server.listen(PORT, () => {
     console.log(`RelayIt Bridge running on port ${PORT}`);
-});
-
-this.wss = new WebSocket.Server({
-    server
 });
 
         this.wss.on("connection", (ws) => {
