@@ -146,25 +146,25 @@ console.log("v3 Active Paint:", user.style?.active_paint_id ?? user.style?.activ
             }
 
             // Get cosmetics from GraphQL
-            const gql = await axios.post(
-              const gqlUser = gql.data.data.users.user;
+const gql = await axios.post(
+    "https://api.7tv.app/v4/gql",
+    {
+        operationName: "OneUser",
+        query: ONE_USER_QUERY,
+        variables: {
+            id: user.id
+        }
+    }
+);
+
+const gqlUser = gql.data.data.users.user;
 
 console.log("GraphQL Paint ID:", gqlUser.style.activePaint?.id);
 console.log("GraphQL Paint Name:", gqlUser.style.activePaint?.name);
-                "https://api.7tv.app/v4/gql",
-                {
-                    operationName: "OneUser",
-                    query: ONE_USER_QUERY,
-                    variables: {
-                        id: user.id
-                    }
-                }
-            );
 
-            const style = gql.data?.data?.users?.user?.style;
-console.log(
-    JSON.stringify(style?.activePaint, null, 2)
-);
+const style = gql.data?.data?.users?.user?.style;
+
+console.log(JSON.stringify(style?.activePaint, null, 2));
             return {
                 paintId: style?.activePaint?.id ?? null,
                 badgeId: style?.activeBadge?.id ?? null,
