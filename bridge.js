@@ -19,6 +19,12 @@ const app = express();
 
 // Serve files from the ChatBridge folder
 app.use(express.static(__dirname));
+console.log("__dirname:", __dirname);
+
+app.use((req, res, next) => {
+    console.log(req.method, req.url);
+    next();
+});
 
 // Test route
 app.get("/test", (req, res) => {
