@@ -33,10 +33,15 @@ app.get("/test", (req, res) => {
 
 // Overlay route
 app.get("/", (req, res) => {
-    console.log("GET /");
+    console.log("Serving:", path.join(__dirname, "overlay.html"));
     res.sendFile(path.join(__dirname, "overlay.html"));
 });
+const fs = require("fs");
 
+app.get("/debug-overlay", (req, res) => {
+    res.type("text/plain");
+    res.send(fs.readFileSync(path.join(__dirname, "overlay.html"), "utf8"));
+});
 const server = http.createServer(app);
 
 // Attach WebSocket to the same server
