@@ -37,7 +37,12 @@ function createBadges(data) {
                 version,
                 data.channelId
             );
-
+console.log(
+    "Platform:", data.platform,
+    "Badge:", badge,
+    "Version:", version,
+    "Path:", badgePath
+);
             if (!badgePath) continue;
 
             html += `

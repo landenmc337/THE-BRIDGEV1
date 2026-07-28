@@ -1,10 +1,10 @@
 :root{
-    --chat-font:"Open Sans", sans-serif;
+    --chat-font: "Segoe UI", sans-serif;
 
-    --chat-font-size:35px;
+    --chat-font-size:25px;
 
-    --badge-size:28px;
-    --platform-size:28px;
+    --badge-size:22px;
+    --platform-size:22px;
     --emote-size:42px;
 
     --text-color:#ffffff;
@@ -84,8 +84,7 @@ body{
 
 .message-row{
     display:flex;
-    align-items:center;
-    flex-wrap:wrap;
+    align-items:baseline;
     gap:var(--message-gap);
 
     font-size:var(--chat-font-size);
@@ -97,21 +96,44 @@ body{
 .platform-icon{
     width:var(--platform-size);
     height:var(--platform-size);
-}
+    flex-shrink:0;
+    display:block;
 
-.badges{
-    display:flex;
-    gap:4px;
+    position:relative;
+    top:6px;
 }
 
 .badge{
     width:var(--badge-size);
     height:var(--badge-size);
+    display:block;
+
+    position:relative;
+    top:6px;
+}
+
+.badges{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    flex-shrink:0;
+}
+.badge{
+    width:var(--badge-size);
+    height:var(--badge-size);
+}
+
+.message-content{
+    flex:1;
+    min-width:0;
+    line-height:1.3;
 }
 
 .username{
     font-weight:var(--username-weight);
     color:var(--username-color);
+    position:relative;
+    top:-1px;
 }
 
 .username-pill{
@@ -123,8 +145,14 @@ body{
 }
 
 .text{
+    display:inline;
     font-weight:var(--message-weight);
     color:var(--message-color);
+    line-height:1.3;
+
+    white-space:normal;
+    overflow-wrap:break-word;
+    word-break:break-word;
 }
 
 .text img{

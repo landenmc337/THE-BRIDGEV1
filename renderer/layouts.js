@@ -6,8 +6,11 @@ const Layouts = {
             <div class="message-row">
                 ${createPlatform(data)}
                 ${createBadges(data)}
-                ${createUsername(data)}
-                ${createText(data)}
+
+                <div class="message-content">
+                    ${createUsername(data)}
+                    ${createText(data)}
+                </div>
             </div>
         `;
 
@@ -21,11 +24,11 @@ const Layouts = {
                 <div class="message-row">
                     ${createPlatform(data)}
                     ${createBadges(data)}
-                    ${createUsername(data)}
-                </div>
 
-                <div class="bubble-text">
-                    ${createText(data)}
+                    <div class="message-content">
+                        ${createUsername(data)}
+                        ${createText(data)}
+                    </div>
                 </div>
 
             </div>
@@ -40,14 +43,16 @@ const Layouts = {
                 ${createPlatform(data)}
                 ${createBadges(data)}
 
-                <span
-                    class="username-pill"
-                    style="background:${data.color || "#9146FF"}"
-                >
-                    ${data.username}
-                </span>
+                <div class="message-content">
+                    <span
+                        class="username-pill"
+                        style="background:${data.color || "#9146FF"}"
+                    >
+                        ${data.username}
+                    </span>
 
-                ${createText(data)}
+                    ${createText(data)}
+                </div>
             </div>
         `;
 
@@ -58,8 +63,11 @@ const Layouts = {
         return `
             <div class="message-row compact">
                 ${createBadges(data)}
-                ${createUsername(data)}
-                ${createText(data)}
+
+                <div class="message-content">
+                    ${createUsername(data)}
+                    ${createText(data)}
+                </div>
             </div>
         `;
 
@@ -85,11 +93,11 @@ const Layouts = {
                 <div class="message-row">
                     ${createPlatform(data)}
                     ${createBadges(data)}
-                    ${createUsername(data)}
-                </div>
 
-                <div class="bubble-text">
-                    ${createText(data)}
+                    <div class="message-content">
+                        ${createUsername(data)}
+                        ${createText(data)}
+                    </div>
                 </div>
 
             </div>
