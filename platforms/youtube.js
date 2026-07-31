@@ -6,6 +6,8 @@ require("dotenv").config();
 Log.setLevel(Log.Level.ERROR);
 
 let yt = null;
+let connected = false;
+let checking = false;
 
 async function getYT() {
     if (!yt) {
@@ -22,59 +24,105 @@ async function connect() {
         console.log("Looking up:", process.env.YOUTUBE_CHANNEL);
 
         const endpoint = await youtube.resolveURL(process.env.YOUTUBE_CHANNEL);
+
+        if (!endpoint?.payload?.browseId) {
+            console.log("❌ Could not resolve YouTube channel.");
+            return false;
+        }
+
         const browseId = endpoint.payload.browseId;
 
         const channel = await youtube.getChannel(browseId);
 
-        const featured = channel.current_tab.content.contents[0].contents[0];
+        const featured =
+            channel?.current_tab?.content?.contents?.[0]?.contents?.[0];
+
+        if (!featured?.items?.length) {
+            console.log("📺 YouTube channel is currently offline.");
+            return false;
+        }
+
         const video = featured.items[0];
+
+        if (!video?.content_id) {
+            console.log("📺 No live stream found.");
+            return false;
+        }
 
         const videoId = video.content_id;
 
-        console.log("Live Video:", videoId);
+        console.log("✅ Live Video:", videoId);
 
         const info = await youtube.getInfo(videoId);
 
         const liveChat = await info.getLiveChat();
 
-        console.log("Starting chat...");
+        if (!liveChat) {
+            console.log("❌ Live chat unavailable.");
+            return false;
+        }
+
+        console.log("Starting YouTube chat...");
 
         await liveChat.start();
 
-        console.log("Chat started!");
+        console.log("✅ YouTube chat connected!");
 
         liveChat.addEventListener("chat-update", (event) => {
             for (const action of event.detail) {
-                if (action.type !== "AddChatItemAction")
-                    continue;
+                if (action.type !== "AddChatItemAction") continue;
 
                 const msg = action.item;
 
-                // Debug the message object
-                console.dir(msg, { depth: 4 });
-                console.log("Sending to bridge:", {
-    username: msg.author.name,
-    text: msg.message.text
-});
-
                 bridge.send({
-    type: "message",
-    platform: "youtube",
-
-    username: msg.author.name,
-
-    text: msg.message.text,
-
-    badges: msg.author.badges,
-
-    userId: msg.author.id
-});
+                    type: "message",
+                    platform: "youtube",
+                    username: msg.author?.name ?? "Unknown",
+                    text: msg.message?.text ?? "",
+                    badges: msg.author?.badges ?? [],
+                    userId: msg.author?.id ?? ""
+                });
             }
         });
 
+        return true;
     } catch (err) {
-        console.error(err);
+        console.error("YouTube Error:", err);
+        return false;
     }
 }
 
-connect();
+async function tryConnect() {
+    if (connected || checking) return;
+
+    checking = true;
+
+    try {
+        const success = await connect();
+
+        if (success) {
+            connected = true;
+            console.log("✅ YouTube watcher connected.");
+        } else {
+            console.log("📺 YouTube offline. Checking again in 60 seconds...");
+        }
+    } catch (err) {
+        console.error("Watcher Error:", err);
+    } finally {
+        checking = false;
+    }
+}
+
+async function startWatcher() {
+    console.log("🎥 Starting YouTube watcher...");
+
+    await tryConnect();
+
+    setInterval(async () => {
+        if (!connected) {
+            await tryConnect();
+        }
+    }, 60000);
+}
+
+startWatcher();

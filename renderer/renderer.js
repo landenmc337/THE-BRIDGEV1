@@ -5,20 +5,13 @@ function createPlatform(data) {
     }
 
     const platform = PlatformManager.normalize(data.platform);
-
     const icon = IconManager.get(platform);
 
     if (!icon) {
         return "";
     }
 
-    return `
-        <img
-            class="platform-icon"
-            src="${icon}"
-            alt="${data.platform}"
-        >
-    `;
+    return `<img class="platform-icon" src="${icon}" alt="${data.platform}">`;
 
 }
 
@@ -37,22 +30,17 @@ function createBadges(data) {
                 version,
                 data.channelId
             );
-console.log(
-    "Platform:", data.platform,
-    "Badge:", badge,
-    "Version:", version,
-    "Path:", badgePath
-);
+
+            console.log(
+                "Platform:", data.platform,
+                "Badge:", badge,
+                "Version:", version,
+                "Path:", badgePath
+            );
+
             if (!badgePath) continue;
 
-            html += `
-                <img
-                    class="badge"
-                    src="${badgePath}"
-                    alt="${badge}"
-                    title="${badge}"
-                >
-            `;
+            html += `<img class="badge" src="${badgePath}" alt="${badge}" title="${badge}">`;
         }
     }
 
@@ -63,19 +51,26 @@ console.log(
             data.sevenTV.badge.images.find(img => img.scale === 4)?.url ??
             data.sevenTV.badge.images[0].url;
 
-        html += `
-            <img
-                class="badge"
-                src="${badgeUrl}"
-                alt="${data.sevenTV.badge.name}"
-                title="${data.sevenTV.badge.name}"
-            >
-        `;
+        html += `<img class="badge" src="${badgeUrl}" alt="${data.sevenTV.badge.name}" title="${data.sevenTV.badge.name}">`;
     }
 
     html += "</span>";
 
     return html === '<span class="badges"></span>' ? "" : html;
+
+}
+
+function getFallbackColor(username) {
+
+    let hash = 0;
+
+    for (const char of username.toLowerCase()) {
+        hash = (hash * 31 + char.charCodeAt(0)) | 0;
+    }
+
+    const hue = Math.abs(hash) % 360;
+
+    return `hsl(${hue}, 65%, 62%)`;
 
 }
 
@@ -95,16 +90,11 @@ function createUsername(data) {
             .join(";")
         : "";
 
-    const colorStyle = data.color ? `color:${data.color};` : "";
+    const usernameColor = data.color || getFallbackColor(data.username);
+    const colorStyle = `color:${usernameColor};`;
 
-    return `
-        <span
-            class="username"
-            style="${colorStyle}${css}"
-        >
-            ${data.username}:
-        </span>
-    `;
+    return `<span class="username" style="${colorStyle}${css}">${data.username}:</span>`;
+
 }
 
 function createText(data) {
@@ -119,9 +109,7 @@ function createText(data) {
         html = SevenTVManager.process(html);
     }
 
-    return `
-        <span class="text">${html}</span>
-    `;
+    return `<span class="text">${html}</span>`;
 
 }
 
@@ -148,6 +136,11 @@ function addMessage(data) {
     message.className = `message layout-${layoutName} new-message`;
 
     message.innerHTML = html;
+
+    const text = message.querySelector(".text");
+
+    console.log("TEXT HTML:");
+    console.log(text ? text.innerHTML : "No .text found");
 
     chat.appendChild(message);
 

@@ -70,12 +70,16 @@ server.listen(PORT, () => {
         this.on("message", (data) => {
 
     console.log("📤 Broadcasting:", data);
+    console.log("👥 Clients:", this.wss.clients.size);
 
     const payload = JSON.stringify(data);
 
     this.wss.clients.forEach((client) => {
 
+        console.log("State:", client.readyState);
+
         if (client.readyState === WebSocket.OPEN) {
+            console.log("✅ Sent to overlay");
             client.send(payload);
         }
 
