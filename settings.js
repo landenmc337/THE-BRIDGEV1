@@ -25,7 +25,11 @@ const RelaySettings = (() => {
 
         shadowColor: params.get("shadowColor") || "rgba(0,0,0,.9)",
 
-        shadowBlur: Number(params.get("shadowBlur")) || 8
+        shadowBlur: Number(params.get("shadowBlur")) || 8,
+
+        // Filters
+        hideCommands: params.get("hideCommands") === "true",
+        commandPrefix: params.get("commandPrefix") || "!"
 
     };
 

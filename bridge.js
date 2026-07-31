@@ -15,42 +15,45 @@ class Bridge extends EventEmitter {
 
         const PORT = process.env.PORT || 3000;
 
-const app = express();
+        this.app = express();
 
-// Serve files from the ChatBridge folder
-app.use(express.static(__dirname));
-console.log("__dirname:", __dirname);
+        // Serve files from the ChatBridge folder
+        this.app.use(express.static(__dirname));
 
-app.use((req, res, next) => {
-    console.log(req.method, req.url);
-    next();
-});
+        console.log("__dirname:", __dirname);
 
-// Test route
-app.get("/test", (req, res) => {
-    res.send("Express is working!");
-});
+        this.app.use((req, res, next) => {
+            console.log(req.method, req.url);
+            next();
+        });
 
-// Overlay route
-app.get("/", (req, res) => {
-    console.log("Serving:", path.join(__dirname, "overlay.html"));
-    res.sendFile(path.join(__dirname, "overlay.html"));
-});
-const fs = require("fs");
+        // Test route
+        this.app.get("/test", (req, res) => {
+            res.send("Express is working!");
+        });
 
-app.get("/debug-overlay", (req, res) => {
-    res.type("text/plain");
-    res.send(fs.readFileSync(path.join(__dirname, "overlay.html"), "utf8"));
-});
-const server = http.createServer(app);
+        // Overlay route
+        this.app.get("/", (req, res) => {
+            console.log("Serving:", path.join(__dirname, "overlay.html"));
+            res.sendFile(path.join(__dirname, "overlay.html"));
+        });
 
-// Attach WebSocket to the same server
-this.wss = new WebSocket.Server({ server });
+        const fs = require("fs");
 
-// Start the server
-server.listen(PORT, () => {
-    console.log(`RelayIt Bridge running on port ${PORT}`);
-});
+        this.app.get("/debug-overlay", (req, res) => {
+            res.type("text/plain");
+            res.send(fs.readFileSync(path.join(__dirname, "overlay.html"), "utf8"));
+        });
+
+        const server = http.createServer(this.app);
+
+        // Attach WebSocket to the same server
+        this.wss = new WebSocket.Server({ server });
+
+        // Start the server
+        server.listen(PORT, () => {
+            console.log(`RelayIt Bridge running on port ${PORT}`);
+        });
 
         this.wss.on("connection", (ws) => {
 
@@ -69,25 +72,25 @@ server.listen(PORT, () => {
 
         this.on("message", (data) => {
 
-    console.log("📤 Broadcasting:", data);
-    console.log("👥 Clients:", this.wss.clients.size);
+            console.log("📤 Broadcasting:", data);
+            console.log("👥 Clients:", this.wss.clients.size);
 
-    const payload = JSON.stringify(data);
+            const payload = JSON.stringify(data);
 
-    this.wss.clients.forEach((client) => {
+            this.wss.clients.forEach((client) => {
 
-        console.log("State:", client.readyState);
+                console.log("State:", client.readyState);
 
-        if (client.readyState === WebSocket.OPEN) {
-            console.log("✅ Sent to overlay");
-            client.send(payload);
-        }
+                if (client.readyState === WebSocket.OPEN) {
+                    console.log("✅ Sent to overlay");
+                    client.send(payload);
+                }
 
-    });
+            });
 
-});
+        });
 
-}
+    }
 
     send(data) {
 

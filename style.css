@@ -3,8 +3,8 @@
 
     --chat-font-size:25px;
 
-    --badge-size:22px;
-    --platform-size:22px;
+    --badge-size:18px;
+    --platform-size:18px;
     --emote-size:42px;
 
     --text-color:#ffffff;
@@ -65,18 +65,22 @@ body {
     font-size: var(--chat-font-size);
 }
 
-.username{
-    display:inline;
+.username {
+    display: inline;
 
-    font-family:"Inter", sans-serif;
-    font-size:inherit;
-    font-weight:700;
+    font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+    font-weight: 700;
+    color: var(--username-color);
 
-    line-height:inherit;
-    letter-spacing:0.01em;
-    font-style:inherit;
+    line-height: 1.3;
+    vertical-align: baseline;
 
-    color:var(--username-color);
+    filter: drop-shadow(
+        var(--username-shadow-x)
+        var(--username-shadow-y)
+        var(--username-shadow-blur)
+        var(--username-shadow-color)
+    );
 }
 
 .text {
@@ -185,16 +189,17 @@ body {
     box-sizing:border-box;
 }
 
-.username{
-    display:inline;
+.username {
+    display: inline;
 
-    font-weight:var(--username-weight);
-    color:var(--username-color);
+    font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+    font-weight: 700;
+    color: var(--username-color);
 
-    line-height:1.3;
-    vertical-align:baseline;
+    line-height: 1.3;
+    vertical-align: baseline;
 
-    filter:drop-shadow(
+    filter: drop-shadow(
         var(--username-shadow-x)
         var(--username-shadow-y)
         var(--username-shadow-blur)
