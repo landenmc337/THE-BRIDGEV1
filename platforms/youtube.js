@@ -19,20 +19,19 @@ async function getYT() {
 
 async function connect() {
     try {
+
         const youtube = await getYT();
 
-        console.log("Looking up:", process.env.YOUTUBE_CHANNEL);
+        const channelId = process.env.YOUTUBE_CHANNEL_ID;
 
-        const endpoint = await youtube.resolveURL(process.env.YOUTUBE_CHANNEL);
-
-        if (!endpoint?.payload?.browseId) {
-            console.log("❌ Could not resolve YouTube channel.");
+        if (!channelId) {
+            console.log("❌ YOUTUBE_CHANNEL_ID is missing from .env");
             return false;
         }
 
-        const browseId = endpoint.payload.browseId;
+        console.log("Looking up channel ID:", channelId);
 
-        const channel = await youtube.getChannel(browseId);
+        const channel = await youtube.getChannel(channelId);
 
         const featured =
             channel?.current_tab?.content?.contents?.[0]?.contents?.[0];
@@ -62,14 +61,16 @@ async function connect() {
             return false;
         }
 
-        console.log("Starting YouTube chat...");
+        console.log("▶ Starting YouTube chat...");
 
         await liveChat.start();
 
         console.log("✅ YouTube chat connected!");
 
         liveChat.addEventListener("chat-update", (event) => {
+
             for (const action of event.detail) {
+
                 if (action.type !== "AddChatItemAction") continue;
 
                 const msg = action.item;
@@ -82,47 +83,72 @@ async function connect() {
                     badges: msg.author?.badges ?? [],
                     userId: msg.author?.id ?? ""
                 });
+
             }
+
         });
 
         return true;
+
     } catch (err) {
+
         console.error("YouTube Error:", err);
+
         return false;
+
     }
 }
 
 async function tryConnect() {
+
     if (connected || checking) return;
 
     checking = true;
 
     try {
+
         const success = await connect();
 
         if (success) {
+
             connected = true;
+
             console.log("✅ YouTube watcher connected.");
+
         } else {
+
             console.log("📺 YouTube offline. Checking again in 60 seconds...");
+
         }
+
     } catch (err) {
+
         console.error("Watcher Error:", err);
+
     } finally {
+
         checking = false;
+
     }
+
 }
 
 async function startWatcher() {
+
     console.log("🎥 Starting YouTube watcher...");
 
     await tryConnect();
 
     setInterval(async () => {
+
         if (!connected) {
+
             await tryConnect();
+
         }
+
     }, 60000);
+
 }
 
 startWatcher();
