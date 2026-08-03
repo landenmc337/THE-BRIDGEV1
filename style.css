@@ -11,7 +11,7 @@
     --message-color:#ffffff;
     --username-color:inherit;
 
-    --username-weight:700;
+    --username-weight:800;
     --message-weight:1000;
 
     --bubble-color:#232323;
@@ -69,7 +69,7 @@ body {
     display: inline;
 
     font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
-    font-weight: 700;
+    font-weight: var(--username-weight);
     color: var(--username-color);
 
     line-height: 1.3;
