@@ -64,7 +64,41 @@ client.on("connected", async () => {
     }
 
 });
+const DEFAULT_USERNAME_COLORS = [
+    "#FF0000",
+    "#0000FF",
+    "#008000",
+    "#B22222",
+    "#FF7F50",
+    "#9ACD32",
+    "#FF4500",
+    "#2E8B57",
+    "#DAA520",
+    "#D2691E",
+    "#5F9EA0",
+    "#1E90FF",
+    "#FF69B4",
+    "#8A2BE2",
+    "#00FF7F"
+];
 
+function getUsernameColor(username, color) {
+
+    if (color) return color;
+
+    let hash = 0;
+
+    for (let i = 0; i < username.length; i++) {
+
+        hash = username.charCodeAt(i) + ((hash << 5) - hash);
+
+    }
+
+    return DEFAULT_USERNAME_COLORS[
+        Math.abs(hash) % DEFAULT_USERNAME_COLORS.length
+    ];
+
+}
 client.on("message", async (channel, tags, message, self) => {
 
     if (self) return;
@@ -77,7 +111,10 @@ client.on("message", async (channel, tags, message, self) => {
 
         username: tags["display-name"],
 
-        color: tags.color || "#ffffff",
+        color: getUsernameColor(
+    tags["display-name"],
+    tags.color
+),
 
         text: message,
 
