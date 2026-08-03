@@ -7,7 +7,7 @@ const RelaySettings = (() => {
         channel: params.get("channel") || "deeno4k",
 
         fontSize: Number(params.get("font")) || 32,
-        fadeTime: Number(params.get("fade")) || 30,
+        fadeTime: Number(params.get("fade")) || 45,
 
         badgeSize: Number(params.get("badgeSize")) || 40,
         emoteSize: Number(params.get("emoteSize")) || 40,
