@@ -100,6 +100,7 @@ body {
         var(--text-shadow-color)
     );
 }
+
 #chat{
     position:fixed;
     left:var(--chat-left);
@@ -179,6 +180,17 @@ body {
     top:3.5px;
 }
 
+/* 7TV badges */
+.seventv-badge{
+    width:24px;
+    height:24px;
+
+    display:block;
+
+    position:relative;
+    top:3.5px;
+}
+
 .message-content {
     flex: 1;
     min-width: 0;
@@ -205,11 +217,19 @@ body {
 
 .emote {
     display: inline-block !important;
-    width: var(--emote-size) !important;
-    height: var(--emote-size) !important;
+    width: 84px !important;
+    height: 84px !important;
     vertical-align: middle;
     object-fit: contain;
 }
+
+.seventv-emote {
+    width: 116px !important;
+    height: 108px !important;
+    vertical-align: middle;
+    object-fit: contain;
+}
+
 .bubble{
     display:flex;
     flex-direction:column;

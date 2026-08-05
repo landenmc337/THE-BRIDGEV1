@@ -10,7 +10,7 @@ const RelaySettings = (() => {
         fadeTime: Number(params.get("fade")) || 45,
 
         badgeSize: Number(params.get("badgeSize")) || 40,
-        emoteSize: Number(params.get("emoteSize")) || 40,
+        emoteSize: Number(params.get("emoteSize")) || 72,
 
         align: params.get("align") || "left",
 

@@ -114,13 +114,12 @@ const SevenTVManager = {
 
                 if (!emote) return word;
 
-                return `<img class="emote"
-                    src="${emote.url}"
-                    alt="${word}"
-                    loading="lazy"
-                    decoding="async"
-                    draggable="false">`;
-
+                return `<img class="emote seventv-emote"
+    src="${emote.url}"
+    alt="${word}"
+    loading="lazy"
+    decoding="async"
+    draggable="false">`;
             })
             .join(" ");
 
