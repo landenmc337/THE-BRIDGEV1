@@ -19,13 +19,18 @@ const BadgeManager = {
 
     exists(platform, badge, version = "1") {
 
-        const path = this.get(platform, badge, version);
+        const badgePath = this.get(platform, badge, version);
 
-        if (!path) {
-            return false;
+        if (!badgePath) {
+            return null;
         }
 
-        return path;
+        // Browser check
+        const img = new Image();
+
+        img.src = badgePath;
+
+        return badgePath;
 
     }
 

@@ -6,9 +6,9 @@ const path = require("path");
 
 const { getAppToken, getUserId } = require("./twitchAuth");
 
-async function downloadImage(url, destination) {
+async function downloadImage(url, destination, overwrite = false) {
 
-    if (await fs.pathExists(destination)) {
+    if (!overwrite && await fs.pathExists(destination)) {
         return;
     }
 
@@ -31,7 +31,7 @@ async function downloadImage(url, destination) {
 
 }
 
-async function downloadBadgeSet(data, rootFolder) {
+async function downloadBadgeSet(data, rootFolder, overwrite = false) {
 
     for (const badgeSet of data) {
 
@@ -51,12 +51,11 @@ async function downloadBadgeSet(data, rootFolder) {
 
             await downloadImage(
                 version.image_url_4x,
-                file
+                file,
+                overwrite
             );
 
-            console.log(
-                `✅ ${badgeSet.set_id}/${version.id}.png`
-            );
+            console.log(`✅ ${badgeSet.set_id}/${version.id}.png`);
 
         }
 
@@ -80,12 +79,17 @@ async function downloadGlobalBadges(token) {
 
     const folder = path.join(
         __dirname,
-        "../assets/badges/twitch"
+        "assets",
+        "badges",
+        "twitch"
     );
+
+    console.log("📁 Saving global badges to:", folder);
 
     await downloadBadgeSet(
         response.data.data,
-        folder
+        folder,
+        false
     );
 
 }
@@ -111,12 +115,17 @@ async function downloadChannelBadges(token, username) {
 
     const folder = path.join(
         __dirname,
-        "../assets/badges/twitch"
+        "assets",
+        "badges",
+        "twitch"
     );
+
+    console.log("📁 Saving channel badges to:", folder);
 
     await downloadBadgeSet(
         response.data.data,
-        folder
+        folder,
+        true
     );
 
 }
@@ -155,3 +164,7 @@ async function downloadBadges(username = "deeno4k") {
 module.exports = {
     downloadBadges
 };
+
+if (require.main === module) {
+    downloadBadges().catch(console.error);
+}

@@ -105,6 +105,10 @@ client.on("message", async (channel, tags, message, self) => {
 
     const sevenTV = await SevenTVCosmetics.get(tags["user-id"]);
     console.log(JSON.stringify(sevenTV, null, 2));
+    console.log(
+    tags["display-name"],
+    tags.badges
+);
     bridge.send({
 
         platform: "twitch",
