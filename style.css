@@ -224,8 +224,8 @@ body {
 }
 
 .seventv-emote {
-    width: 140px !important;
-    height: 140x !important;
+    width: 200px !important;
+    height: 200x !important;
     vertical-align: middle;
     object-fit: contain;
 }
