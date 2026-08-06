@@ -217,17 +217,21 @@ body {
 
 .emote {
     display: inline-block !important;
-    width: 84px !important;
-    height: 84px !important;
+    width: 76px !important;
+    height: 76px !important;
     vertical-align: middle;
     object-fit: contain;
 }
 
 .seventv-emote {
-    width: 200px !important;
-    height: 200x !important;
+    display: inline-block !important;
+    width: 84px !important;
+    height: 84px !important;
     vertical-align: middle;
     object-fit: contain;
+
+    margin-top: -12px;
+    margin-bottom: -12px;
 }
 
 .bubble{
