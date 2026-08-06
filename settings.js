@@ -27,9 +27,22 @@ const RelaySettings = (() => {
 
         shadowBlur: Number(params.get("shadowBlur")) || 8,
 
-        // Filters
+        // ===============================
+        // Chat Filters
+        // ===============================
+
+        hideBots: params.get("hideBots") === "true",
+
         hideCommands: params.get("hideCommands") === "true",
-        commandPrefix: params.get("commandPrefix") || "!"
+
+        commandPrefix: params.get("commandPrefix") || "!",
+
+        hiddenUsers: (
+            params.get("hiddenUsers") || ""
+        )
+            .split(",")
+            .map(user => user.trim().toLowerCase())
+            .filter(Boolean)
 
     };
 

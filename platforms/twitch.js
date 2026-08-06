@@ -2,6 +2,7 @@ const tmi = require("tmi.js");
 const axios = require("axios");
 const bridge = require("../bridge");
 const SevenTVCosmetics = require("../managers/sevenTVCosmetics");
+const config = require("../config");
 
 require("dotenv").config();
 
@@ -56,14 +57,14 @@ client.on("connected", async () => {
 
         bridge.setBroadcasterId(broadcasterId);
 
-    }
-    catch (err) {
+    } catch (err) {
 
         console.error(err.response?.data || err);
 
     }
 
 });
+
 const DEFAULT_USERNAME_COLORS = [
     "#FF0000",
     "#0000FF",
@@ -89,9 +90,7 @@ function getUsernameColor(username, color) {
     let hash = 0;
 
     for (let i = 0; i < username.length; i++) {
-
         hash = username.charCodeAt(i) + ((hash << 5) - hash);
-
     }
 
     return DEFAULT_USERNAME_COLORS[
@@ -99,16 +98,48 @@ function getUsernameColor(username, color) {
     ];
 
 }
+
 client.on("message", async (channel, tags, message, self) => {
 
     if (self) return;
 
+    const username = (
+        tags.username ||
+        tags.login ||
+        tags["display-name"] ||
+        ""
+    ).toLowerCase();
+
+    // ===============================
+    // Filters
+    // ===============================
+
+    console.log("RAW MESSAGE:", JSON.stringify(message));
+
+const trimmedMessage = message.trim();
+
+console.log("TRIMMED:", JSON.stringify(trimmedMessage));
+console.log("STARTS WITH !:", trimmedMessage.startsWith("!"));
+
+if (
+    config.filters.hideCommands &&
+    trimmedMessage.startsWith(config.filters.commandPrefix)
+) {
+    console.log("🚫 Hidden Command:", trimmedMessage);
+    return;
+}
+
+    if (
+        config.filters.hiddenUsers.includes(username)
+    ) {
+        console.log("🚫 Hidden User:", username);
+        return;
+    }
+
+    // ===============================
+
     const sevenTV = await SevenTVCosmetics.get(tags["user-id"]);
-    console.log(JSON.stringify(sevenTV, null, 2));
-    console.log(
-    tags["display-name"],
-    tags.badges
-);
+
     bridge.send({
 
         platform: "twitch",
@@ -116,9 +147,9 @@ client.on("message", async (channel, tags, message, self) => {
         username: tags["display-name"],
 
         color: getUsernameColor(
-    tags["display-name"],
-    tags.color
-),
+            tags["display-name"],
+            tags.color
+        ),
 
         text: message,
 

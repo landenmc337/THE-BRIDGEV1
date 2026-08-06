@@ -13,7 +13,7 @@ const SevenTVManager = {
             // -------------------------
 
             const globalResponse = await fetch(
-                "https://7tv.io/v3/emote-sets/global"
+                "https://api.7tv.app/v3/emote-sets/global"
             );
 
             const globalData = await globalResponse.json();
@@ -34,7 +34,7 @@ const SevenTVManager = {
             // -------------------------
 
             const userResponse = await fetch(
-                `https://7tv.io/v3/users/twitch/${encodeURIComponent(twitchUserId)}`
+                `https://api.7tv.app/v3/users/twitch/${encodeURIComponent(twitchUserId)}`
             );
 
             if (!userResponse.ok) {
@@ -115,11 +115,12 @@ const SevenTVManager = {
                 if (!emote) return word;
 
                 return `<img class="emote seventv-emote"
-    src="${emote.url}"
-    alt="${word}"
-    loading="lazy"
-    decoding="async"
-    draggable="false">`;
+                    src="${emote.url}"
+                    alt="${word}"
+                    loading="lazy"
+                    decoding="async"
+                    draggable="false">`;
+
             })
             .join(" ");
 
