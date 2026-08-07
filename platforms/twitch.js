@@ -139,7 +139,7 @@ function getUsernameColor(username, color) {
 client.on("message", async (channel, tags, message, self) => {
 
     if (self) return;
-
+console.log("💬", tags["display-name"], message);
     const username = (
         tags.username ||
         tags.login ||

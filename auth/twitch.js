@@ -13,7 +13,7 @@ function buildLoginURL() {
 
     const params = new URLSearchParams({
         client_id: process.env.TWITCH_CLIENT_ID,
-        redirect_uri: "http://localhost:3000/auth/twitch/callback",
+        redirect_uri: process.env.TWITCH_REDIRECT_URI,
         response_type: "code",
         scope: "chat:read chat:edit user:read:email",
         force_verify: "false",
@@ -38,7 +38,7 @@ async function exchangeCode(code) {
                 client_secret: process.env.TWITCH_CLIENT_SECRET,
                 code,
                 grant_type: "authorization_code",
-                redirect_uri: "http://localhost:3000/auth/twitch/callback"
+                redirect_uri: process.env.TWITCH_REDIRECT_URI
             }
         }
     );
