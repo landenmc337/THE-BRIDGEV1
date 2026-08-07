@@ -1,3 +1,17 @@
+# Environment
 .env
 .env.*
 !.env.example
+
+# Dependencies
+node_modules/
+
+# User account data
+data/account.json
+
+# Downloaded Twitch badges
+assets/badges/twitch/
+
+# OS files
+.DS_Store
+Thumbs.db
