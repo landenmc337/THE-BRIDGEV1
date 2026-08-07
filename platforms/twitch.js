@@ -3,24 +3,45 @@ const axios = require("axios");
 const bridge = require("../bridge");
 const SevenTVCosmetics = require("../managers/sevenTVCosmetics");
 const config = require("../config");
-
+const { downloadChannelBadges } = require("../assetDownloader");
+const Account = require("../data/account");
 require("dotenv").config();
+let account = null;
+let client = null;
 
-const client = new tmi.Client({
+async function initialize() {
+
+    account = await Account.load();
+
+    if (!account) {
+        console.error("❌ No Twitch account connected.");
+        return;
+    }
+
+    client = new tmi.Client({
+
     identity: {
         username: process.env.TWITCH_BOT_USERNAME,
         password: process.env.TWITCH_OAUTH
     },
-    channels: [
-        process.env.TWITCH_CHANNEL
-    ]
-});
 
+    channels: [
+        account.login
+    ]
+
+});
+registerEvents();
 client.connect().catch(console.error);
+
+}
+
+initialize();
+
+function registerEvents() {
 
 client.on("connected", async () => {
 
-    console.log(`✅ Connected to Twitch: ${process.env.TWITCH_CHANNEL}`);
+    console.log(`✅ Connected to Twitch: ${account.login}`);
 
     try {
 
@@ -46,7 +67,7 @@ client.on("connected", async () => {
                     "Client-Id": process.env.TWITCH_CLIENT_ID
                 },
                 params: {
-                    login: process.env.TWITCH_CHANNEL
+                    login: account.login
                 }
             }
         );
@@ -57,7 +78,23 @@ client.on("connected", async () => {
 
         bridge.setBroadcasterId(broadcasterId);
 
-    } catch (err) {
+        try {
+
+            await downloadChannelBadges(
+    accessToken,
+    account.login
+);
+
+            console.log("✅ Channel badges updated");
+
+        } catch (err) {
+
+            console.error("❌ Failed to update channel badges:", err.message);
+
+        }
+
+    }
+    catch (err) {
 
         console.error(err.response?.data || err);
 
@@ -114,20 +151,15 @@ client.on("message", async (channel, tags, message, self) => {
     // Filters
     // ===============================
 
-    console.log("RAW MESSAGE:", JSON.stringify(message));
+    const trimmedMessage = message.trim();
 
-const trimmedMessage = message.trim();
-
-console.log("TRIMMED:", JSON.stringify(trimmedMessage));
-console.log("STARTS WITH !:", trimmedMessage.startsWith("!"));
-
-if (
-    config.filters.hideCommands &&
-    trimmedMessage.startsWith(config.filters.commandPrefix)
-) {
-    console.log("🚫 Hidden Command:", trimmedMessage);
-    return;
-}
+    if (
+        config.filters.hideCommands &&
+        trimmedMessage.startsWith(config.filters.commandPrefix)
+    ) {
+        console.log("🚫 Hidden Command:", trimmedMessage);
+        return;
+    }
 
     if (
         config.filters.hiddenUsers.includes(username)
@@ -165,4 +197,4 @@ if (
 
     });
 
-});
+});}

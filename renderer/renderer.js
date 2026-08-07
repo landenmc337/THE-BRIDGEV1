@@ -31,17 +31,18 @@ function createBadges(data) {
                 data.channelId
             );
 
-            console.log(
-                "Platform:", data.platform,
-                "Badge:", badge,
-                "Version:", version,
-                "Path:", badgePath
-            );
-
             if (!badgePath) continue;
 
-            html += `<img class="badge" src="${badgePath}" alt="${badge}" title="${badge}">`;
+            html += `
+                <img
+                    class="badge"
+                    src="${badgePath}"
+                    alt="${badge}"
+                    title="${badge}"
+                >`;
+
         }
+
     }
 
     // 7TV Badge
@@ -51,7 +52,14 @@ function createBadges(data) {
             data.sevenTV.badge.images.find(img => img.scale === 4)?.url ??
             data.sevenTV.badge.images[0].url;
 
-        html += `<img class="badge" src="${badgeUrl}" alt="${data.sevenTV.badge.name}" title="${data.sevenTV.badge.name}">`;
+        html += `
+            <img
+                class="badge"
+                src="${badgeUrl}"
+                alt="${data.sevenTV.badge.name}"
+                title="${data.sevenTV.badge.name}"
+            >`;
+
     }
 
     html += "</span>";
@@ -79,9 +87,6 @@ function createUsername(data) {
     const style = window.buildPaint
         ? window.buildPaint(data.sevenTV?.paint)
         : null;
-
-    console.log("Paint object:", data.sevenTV?.paint);
-    console.log("Generated style:", style);
 
     const css = style
         ? Object.entries(style)
@@ -136,11 +141,6 @@ function addMessage(data) {
     message.className = `message layout-${layoutName} new-message`;
 
     message.innerHTML = html;
-
-    const text = message.querySelector(".text");
-
-    console.log("TEXT HTML:");
-    console.log(text ? text.innerHTML : "No .text found");
 
     chat.appendChild(message);
 

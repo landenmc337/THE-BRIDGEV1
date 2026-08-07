@@ -24,6 +24,7 @@
     "fs-extra": "^11.4.0",
     "googleapis": "^173.0.0",
     "lucide-react": "^1.27.0",
+    "openid-client": "^6.8.4",
     "tailwindcss": "^4.3.3",
     "tmi.js": "^1.8.5",
     "ws": "^8.21.1",

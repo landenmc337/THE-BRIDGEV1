@@ -3,7 +3,10 @@ const path = require("path");
 const EventEmitter = require("events");
 const WebSocket = require("ws");
 const http = require("http");
+
 const SevenTVClient = require("./7tv");
+const TwitchAuth = require("./auth/twitch");
+const TwitchCallback = require("./auth/callback");
 
 class Bridge extends EventEmitter {
 
@@ -17,7 +20,7 @@ class Bridge extends EventEmitter {
 
         this.app = express();
 
-        // Serve files from the ChatBridge folder
+        // Serve files
         this.app.use(express.static(__dirname));
 
         console.log("__dirname:", __dirname);
@@ -27,32 +30,63 @@ class Bridge extends EventEmitter {
             next();
         });
 
-        // Test route
+        // ============================
+        // Test Route
+        // ============================
+
         this.app.get("/test", (req, res) => {
             res.send("Express is working!");
         });
 
-        // Overlay route
+        // ============================
+        // Overlay
+        // ============================
+
         this.app.get("/", (req, res) => {
-            console.log("Serving:", path.join(__dirname, "overlay.html"));
             res.sendFile(path.join(__dirname, "overlay.html"));
         });
 
         const fs = require("fs");
 
         this.app.get("/debug-overlay", (req, res) => {
+
             res.type("text/plain");
-            res.send(fs.readFileSync(path.join(__dirname, "overlay.html"), "utf8"));
+
+            res.send(
+                fs.readFileSync(
+                    path.join(__dirname, "overlay.html"),
+                    "utf8"
+                )
+            );
+
         });
+
+        // ============================
+        // Twitch Login
+        // ============================
+
+        this.app.get("/auth/twitch", (req, res) => {
+
+            const result = TwitchAuth.buildLoginURL();
+
+            res.redirect(result.url);
+
+        });
+
+        // ============================
+        // Twitch OAuth Callback
+        // ============================
+
+        this.app.get("/auth/twitch/callback", TwitchCallback);
+
+        // ============================
 
         const server = http.createServer(this.app);
 
-        // Attach WebSocket to the same server
         this.wss = new WebSocket.Server({ server });
 
-        // Start the server
         server.listen(PORT, () => {
-            console.log(`RelayIt Bridge running on port ${PORT}`);
+            console.log(`The Bridge4K running on port ${PORT}`);
         });
 
         this.wss.on("connection", (ws) => {
@@ -72,17 +106,11 @@ class Bridge extends EventEmitter {
 
         this.on("message", (data) => {
 
-            console.log("📤 Broadcasting:", data);
-            console.log("👥 Clients:", this.wss.clients.size);
-
             const payload = JSON.stringify(data);
 
             this.wss.clients.forEach((client) => {
 
-                console.log("State:", client.readyState);
-
                 if (client.readyState === WebSocket.OPEN) {
-                    console.log("✅ Sent to overlay");
                     client.send(payload);
                 }
 
@@ -97,21 +125,13 @@ class Bridge extends EventEmitter {
         this.emit("message", {
 
             type: data.type,
-
             platform: data.platform,
-
             username: data.username,
-
             color: data.color || "#ffffff",
-
             text: data.text,
-
             badges: data.badges || {},
-
             emotes: data.emotes || {},
-
             channelId: data.channelId || "",
-
             userId: data.userId || "",
 
             sevenTV: data.sevenTV || {
@@ -142,13 +162,11 @@ class Bridge extends EventEmitter {
 
 const bridge = new Bridge();
 
-const sevenTV = new SevenTVClient(205072512);
+account.userId
 sevenTV.connect();
 
 module.exports = bridge;
 
-// Load platforms
+// Load Platforms
 require("./platforms/twitch");
 require("./platforms/youtube");
-// Uncomment after YouTube is ready
-// require("./platforms/youtube");

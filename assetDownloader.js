@@ -78,12 +78,11 @@ async function downloadGlobalBadges(token) {
     );
 
     const folder = path.join(
-        __dirname,
-        "assets",
-        "badges",
-        "twitch"
-    );
-
+    __dirname,
+    "assets",
+    "badges",
+    "twitch"
+);
     console.log("📁 Saving global badges to:", folder);
 
     await downloadBadgeSet(
@@ -114,12 +113,11 @@ async function downloadChannelBadges(token, username) {
     );
 
     const folder = path.join(
-        __dirname,
-        "assets",
-        "badges",
-        "twitch"
-    );
-
+    __dirname,
+    "assets",
+    "badges",
+    "twitch"
+);
     console.log("📁 Saving channel badges to:", folder);
 
     await downloadBadgeSet(
@@ -162,7 +160,8 @@ async function downloadBadges(username = "deeno4k") {
 }
 
 module.exports = {
-    downloadBadges
+    downloadBadges,
+    downloadChannelBadges
 };
 
 if (require.main === module) {

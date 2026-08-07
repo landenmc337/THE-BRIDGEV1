@@ -25,9 +25,7 @@ const BadgeManager = {
             return null;
         }
 
-        // Browser check
         const img = new Image();
-
         img.src = badgePath;
 
         return badgePath;
