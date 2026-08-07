@@ -162,7 +162,7 @@ class Bridge extends EventEmitter {
 
 const bridge = new Bridge();
 
-account.userId
+const sevenTV = new SevenTVClient(205072512);
 sevenTV.connect();
 
 module.exports = bridge;
