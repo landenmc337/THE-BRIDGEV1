@@ -3,7 +3,7 @@ const axios = require("axios");
 const bridge = require("../bridge");
 const SevenTVCosmetics = require("../managers/sevenTVCosmetics");
 const config = require("../config");
-const { downloadChannelBadges } = require("../assetDownloader");
+const { downloadBadges } = require("../assetDownloader");
 const Account = require("../data/account");
 require("dotenv").config();
 let account = null;
@@ -91,10 +91,7 @@ client.on("connected", async () => {
 
         try {
 
-            await downloadChannelBadges(
-    accessToken,
-    account.login
-);
+            await downloadBadges(account.login);
 
             console.log("✅ Channel badges updated");
 

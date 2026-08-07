@@ -78,11 +78,12 @@ async function downloadGlobalBadges(token) {
     );
 
     const folder = path.join(
-    __dirname,
-    "assets",
-    "badges",
-    "twitch"
-);
+        __dirname,
+        "assets",
+        "badges",
+        "twitch"
+    );
+
     console.log("📁 Saving global badges to:", folder);
 
     await downloadBadgeSet(
@@ -94,6 +95,12 @@ async function downloadGlobalBadges(token) {
 }
 
 async function downloadChannelBadges(token, username) {
+
+    // Allow this function to be called with only a username
+    if (!username) {
+        username = token;
+        token = await getAppToken();
+    }
 
     console.log(`📺 Downloading channel badges for ${username}...`);
 
@@ -113,11 +120,12 @@ async function downloadChannelBadges(token, username) {
     );
 
     const folder = path.join(
-    __dirname,
-    "assets",
-    "badges",
-    "twitch"
-);
+        __dirname,
+        "assets",
+        "badges",
+        "twitch"
+    );
+
     console.log("📁 Saving channel badges to:", folder);
 
     await downloadBadgeSet(
