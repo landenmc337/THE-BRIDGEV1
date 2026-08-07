@@ -7,6 +7,7 @@ const http = require("http");
 const SevenTVClient = require("./7tv");
 const TwitchAuth = require("./auth/twitch");
 const TwitchCallback = require("./auth/callback");
+const db = require("./database");
 
 class Bridge extends EventEmitter {
 
@@ -159,6 +160,16 @@ class Bridge extends EventEmitter {
     }
 
 }
+(async () => {
+    try {
+        const result = await db.query("SELECT NOW()");
+        console.log("✅ Connected to Postgres!");
+        console.log(result.rows[0]);
+    } catch (err) {
+        console.error("❌ Postgres connection failed:");
+        console.error(err);
+    }
+})();
 
 const bridge = new Bridge();
 
