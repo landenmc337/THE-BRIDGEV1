@@ -2,7 +2,9 @@ const axios = require("axios");
 const Account = require("../data/account");
 
 module.exports = async function TwitchCallback(req, res) {
-console.log("Callback query:", req.query);
+
+    console.log("Callback query:", req.query);
+
     const { code, error } = req.query;
 
     if (error) {
@@ -14,6 +16,10 @@ console.log("Callback query:", req.query);
             <p>Twitch login failed.</p>
         `);
 
+    }
+
+    if (!code) {
+        return res.status(400).send("Missing authorization code.");
     }
 
     try {
@@ -30,26 +36,31 @@ console.log("Callback query:", req.query);
             {
                 headers: {
                     "Client-ID": process.env.TWITCH_CLIENT_ID,
-                    "Authorization": `Bearer ${tokens.access_token}`
+                    Authorization: `Bearer ${tokens.access_token}`
                 }
             }
         );
 
         const user = userResponse.data.data[0];
+
         await Account.save({
 
-    displayName: user.display_name,
-    login: user.login,
-    userId: user.id,
+            displayName: user.display_name,
+            login: user.login,
+            userId: user.id,
 
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
 
-    connectedAt: Date.now()
+            connectedAt: Date.now()
 
-});
+        });
 
-console.log("💾 Account saved.");
+        console.log("💾 Account saved.");
+
+        // Auto-connect Twitch after OAuth
+        const TwitchPlatform = require("../platforms/twitch");
+        await TwitchPlatform.initialize();
 
         console.log("");
         console.log("🎉 Logged Into The Bridge4K");

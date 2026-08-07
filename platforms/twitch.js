@@ -10,6 +10,17 @@ let account = null;
 let client = null;
 
 async function initialize() {
+        if (client) {
+
+        try {
+
+            if (client.readyState() === "OPEN") {
+                return;
+            }
+
+        } catch {}
+
+    }
 
     account = await Account.load();
 
@@ -198,3 +209,6 @@ console.log("💬", tags["display-name"], message);
     });
 
 });}
+module.exports = {
+    initialize
+};
