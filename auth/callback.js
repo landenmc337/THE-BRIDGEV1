@@ -2,7 +2,7 @@ const axios = require("axios");
 const Account = require("../data/account");
 
 module.exports = async function TwitchCallback(req, res) {
-
+console.log("Callback query:", req.query);
     const { code, error } = req.query;
 
     if (error) {
