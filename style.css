@@ -1,60 +1,60 @@
-:root{
+:root {
     --chat-font: "Segoe UI", sans-serif;
 
-    --chat-font-size:25px;
+    --chat-font-size: 25px;
 
-    --badge-size:var(--chat-font-size);
-    --platform-size:18px;
-    --emote-size:42px;
+    --badge-size: var(--chat-font-size);
+    --platform-size: var(--chat-font-size);
+    --emote-size: 42px;
 
-    --text-color:#ffffff;
-    --message-color:#ffffff;
-    --username-color:inherit;
+    --text-color: #ffffff;
+    --message-color: #ffffff;
+    --username-color: inherit;
 
-    --username-weight:800;
-    --message-weight:1000;
+    --username-weight: 800;
+    --message-weight: 1000;
 
-    --bubble-color:var(--bubble-color);
-    --bubble-radius:20px;
-    --bubble-padding-y:14px;
-    --bubble-padding-x:18px;
+    --bubble-color: #232323;
+    --bubble-radius: 20px;
+    --bubble-padding-y: 14px;
+    --bubble-padding-x: 18px;
 
-    --bubble-shadow:0 8px 20px rgba(0,0,0,.35);
-    --bubble-border:0;
-    --bubble-opacity:1;
-    --bubble-blur:0px;
+    --bubble-shadow: 0 8px 20px rgba(0,0,0,.35);
+    --bubble-border: 0;
+    --bubble-opacity: 1;
+    --bubble-blur: 0px;
 
     /* Message Shadow */
-    --text-shadow-x:0px;
-    --text-shadow-y:1px;
-    --text-shadow-blur:2px;
-    --text-shadow-color:rgba(0,0,0,.45);
+    --text-shadow-x: 0px;
+    --text-shadow-y: 1px;
+    --text-shadow-blur: 2px;
+    --text-shadow-color: rgba(0,0,0,.45);
 
     /* Username Shadow */
-    --username-shadow-x:0px;
-    --username-shadow-y:2px;
-    --username-shadow-blur:4px;
-    --username-shadow-color:rgba(0,0,0,.75);
+    --username-shadow-x: 0px;
+    --username-shadow-y: 2px;
+    --username-shadow-blur: 4px;
+    --username-shadow-color: rgba(0,0,0,.75);
 
-    --chat-gap:10px;
-    --chat-left:20px;
-    --chat-bottom:20px;
+    --chat-gap: 10px;
+    --chat-left: 20px;
+    --chat-bottom: 20px;
 
-    --chat-width:900px;
+    --chat-width: 900px;
 
-    --animation-speed:.25s;
-    --animation-distance:12px;
+    --animation-speed: .25s;
+    --animation-distance: 12px;
 
-    --username-background:transparent;
-    --username-pill-padding-y:4px;
-    --username-pill-padding-x:14px;
-    --username-pill-radius:999px;
+    --username-background: transparent;
+    --username-pill-padding-y: 4px;
+    --username-pill-padding-x: 14px;
+    --username-pill-radius: 999px;
 
-    --message-gap:8px;
-    --bubble-gap:8px;
+    --message-gap: 8px;
+    --bubble-gap: 8px;
 
-    --show-platform-icons:true;
-    --show-badges:true;
+    --show-platform-icons: 1;
+    --show-badges: 1;
 }
 
 body {
@@ -68,7 +68,7 @@ body {
 .username {
     display: inline;
 
-    font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+    font-family: var(--chat-font);
     font-weight: var(--username-weight);
     color: var(--username-color);
 
@@ -85,6 +85,7 @@ body {
 
 .text {
     display: inline;
+    font-family: var(--chat-font);
     font-weight: var(--message-weight);
     color: var(--message-color);
 
@@ -101,95 +102,95 @@ body {
     );
 }
 
-#chat{
-    position:fixed;
-    left:var(--chat-left);
-    bottom:var(--chat-bottom);
+#chat {
+    position: fixed;
+    left: var(--chat-left);
+    bottom: var(--chat-bottom);
 
-    display:flex;
-    flex-direction:column;
-    gap:var(--chat-gap);
+    display: flex;
+    flex-direction: column;
+    gap: var(--chat-gap);
 
-    width:calc(100% - (var(--chat-left) * 2));
-    max-width:100%;
+    width: calc(100% - (var(--chat-left) * 2));
+    max-width: 100%;
 
-    box-sizing:border-box;
+    box-sizing: border-box;
 }
 
-.message{
-    animation:fadeIn var(--animation-speed) ease;
-    transition:opacity .4s ease, transform .4s ease;
+.message {
+    animation: fadeIn var(--animation-speed) ease;
+    transition: opacity .4s ease, transform .4s ease;
 }
 
-.message.fade-out{
-    opacity:0;
-    transform:translateY(-12px);
+.message.fade-out {
+    opacity: 0;
+    transform: translateY(-12px);
 }
 
-@keyframes fadeIn{
-    from{
-        opacity:0;
-        transform:translateY(var(--animation-distance));
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(var(--animation-distance));
     }
 
-    to{
-        opacity:1;
-        transform:translateY(0);
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 
-.message-row{
-    display:flex;
-    align-items:baseline;
-    gap:var(--message-gap);
+.message-row {
+    display: flex;
+    align-items: baseline;
+    gap: var(--message-gap);
 
-    width:100%;
-    min-width:0;
-    max-width:100%;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
 
-    box-sizing:border-box;
+    box-sizing: border-box;
 }
 
-.platform-icon{
-    width:var(--platform-size);
-    height:var(--platform-size);
+.platform-icon {
+    width: var(--platform-size);
+    height: var(--platform-size);
 
-    flex-shrink:0;
-    display:block;
+    flex-shrink: 0;
+    display: block;
 
-    position:relative;
-    top:6px;
+    position: relative;
+    top: 6px;
 
-    opacity:var(--show-platform-icons);
+    opacity: var(--show-platform-icons);
 }
 
-.badges{
-    display:flex;
-    align-items:center;
-    gap:4px;
+.badges {
+    display: flex;
+    align-items: center;
+    gap: 4px;
 
-    flex-shrink:0;
+    flex-shrink: 0;
 }
 
-.badge{
-    width:var(--badge-size);
-    height:var(--badge-size);
+.badge {
+    width: var(--badge-size);
+    height: var(--badge-size);
 
-    display:block;
+    display: block;
 
-    position:relative;
-    top:3.5px;
+    position: relative;
+    top: 3.5px;
 }
 
 /* 7TV badges */
-.seventv-badge{
-    width:24px;
-    height:24px;
+.seventv-badge {
+    width: var(--badge-size);
+    height: var(--badge-size);
 
-    display:block;
+    display: block;
 
-    position:relative;
-    top:3.5px;
+    position: relative;
+    top: 3.5px;
 }
 
 .message-content {
@@ -205,15 +206,16 @@ body {
     word-break: break-word;
 }
 
-.username-pill{
-    padding:var(--username-pill-padding-y) var(--username-pill-padding-x);
+.username-pill {
+    padding: var(--username-pill-padding-y) var(--username-pill-padding-x);
 
-    border-radius:var(--username-pill-radius);
+    border-radius: var(--username-pill-radius);
 
-    background:var(--username-background);
+    background: var(--username-background);
 
-    color:#fff;
-    font-weight:700;
+    color: #fff;
+    font-family: var(--chat-font);
+    font-weight: 700;
 }
 
 .emote {
@@ -235,51 +237,55 @@ body {
     margin-bottom: -12px;
 }
 
-.bubble{
-    display:flex;
-    flex-direction:column;
-    gap:var(--bubble-gap);
+.bubble {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bubble-gap);
 
-    width:fit-content;
-    max-width:100%;
+    width: fit-content;
+    max-width: 100%;
 
-    box-sizing:border-box;
+    box-sizing: border-box;
 
-    padding:var(--bubble-padding-y) var(--bubble-padding-x);
+    padding: var(--bubble-padding-y) var(--bubble-padding-x);
 
-    border-radius:var(--bubble-radius);
+    border-radius: var(--bubble-radius);
 
-    background:rgb(from var(--bubble-color) r g b / var(--bubble-opacity));
-    backdrop-filter:blur(var(--bubble-blur));
+    background: rgb(
+        from var(--bubble-color)
+        r g b / var(--bubble-opacity)
+    );
 
-    box-shadow:var(--bubble-shadow);
-    border:var(--bubble-border);
+    backdrop-filter: blur(var(--bubble-blur));
+
+    box-shadow: var(--bubble-shadow);
+    border: var(--bubble-border);
 }
 
-.bubble-text{
-    line-height:1.4;
+.bubble-text {
+    line-height: 1.4;
 }
 
-.glass{
-    display:flex;
-    flex-direction:column;
-    gap:8px;
+.glass {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 
-    width:fit-content;
-    max-width:100%;
+    width: fit-content;
+    max-width: 100%;
 
-    box-sizing:border-box;
+    box-sizing: border-box;
 
-    padding:var(--bubble-padding-y) var(--bubble-padding-x);
+    padding: var(--bubble-padding-y) var(--bubble-padding-x);
 
-    border-radius:var(--bubble-radius);
+    border-radius: var(--bubble-radius);
 
-    background:rgba(255,255,255,.08);
-    backdrop-filter:blur(16px);
+    background: rgba(255,255,255,.08);
+    backdrop-filter: blur(16px);
 
-    border:1px solid rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.15);
 }
 
-.compact{
-    gap:5px;
+.compact {
+    gap: 5px;
 }

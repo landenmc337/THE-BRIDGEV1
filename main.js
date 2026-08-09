@@ -7,6 +7,18 @@ const root = document.documentElement;
 // ===============================
 
 root.style.setProperty(
+    "--chat-font",
+    RelaySettings.font
+);
+
+console.log("🎨 Live font:", RelaySettings.font);
+console.log(
+    "🎨 CSS font:",
+    getComputedStyle(document.documentElement)
+        .getPropertyValue("--chat-font")
+);
+
+root.style.setProperty(
     "--chat-font-size",
     `${RelaySettings.fontSize}px`
 );
@@ -18,7 +30,7 @@ root.style.setProperty(
 
 root.style.setProperty(
     "--platform-size",
-    `${RelaySettings.badgeSize}px`
+    `${RelaySettings.fontSize}px`
 );
 
 root.style.setProperty(
@@ -254,9 +266,10 @@ const pathname =
 
 const socketUrl =
     `${protocol}//${host}${pathname}` +
-    `${overlayId
-        ? `?overlayId=${encodeURIComponent(overlayId)}`
-        : ""
+    `${
+        overlayId
+            ? `?overlayId=${encodeURIComponent(overlayId)}`
+            : ""
     }`;
 
 console.log(
@@ -272,7 +285,6 @@ socket.onopen = () => {
     console.log(
         "🟢 Connected"
     );
-
 };
 
 socket.onmessage = async (event) => {
@@ -318,7 +330,6 @@ socket.onclose = () => {
     console.log(
         "Disconnected"
     );
-
 };
 
 socket.onerror = (error) => {
@@ -327,5 +338,4 @@ socket.onerror = (error) => {
         "WebSocket error:",
         error
     );
-
 };
