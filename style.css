@@ -14,7 +14,7 @@
     --username-weight:800;
     --message-weight:1000;
 
-    --bubble-color:#232323;
+    --bubble-color:var(--bubble-color);
     --bubble-radius:20px;
     --bubble-padding-y:14px;
     --bubble-padding-x:18px;

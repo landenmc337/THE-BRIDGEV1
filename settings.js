@@ -45,8 +45,9 @@ const RelaySettings = (() => {
             || "left",
 
         layout:
-            (params.get("layout") || "classic")
-                .toLowerCase(),
+    params.get("showBubble") === "true"
+        ? "bubble"
+        : "classic",
 
         theme:
             (params.get("theme") || "default")

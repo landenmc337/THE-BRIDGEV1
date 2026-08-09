@@ -128,11 +128,9 @@ function addMessage(data) {
     }
 
     const layoutName =
-        (typeof RelaySettings !== "undefined" &&
-            RelaySettings.layout &&
-            Layouts[RelaySettings.layout])
-            ? RelaySettings.layout
-            : "classic";
+    RelaySettings.showBubble
+        ? "bubble"
+        : "classic";
 
     const html = Layouts[layoutName](data);
 
