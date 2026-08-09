@@ -3,7 +3,7 @@
 
     --chat-font-size:25px;
 
-    --badge-size:18px;
+    --badge-size:var(--chat-font-size);
     --platform-size:18px;
     --emote-size:42px;
 
@@ -155,11 +155,12 @@ body {
     height:var(--platform-size);
 
     flex-shrink:0;
-
     display:block;
 
     position:relative;
     top:6px;
+
+    opacity:var(--show-platform-icons);
 }
 
 .badges{

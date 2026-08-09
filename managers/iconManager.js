@@ -5,13 +5,13 @@ const IconManager = {
         switch ((platform || "").toLowerCase()) {
 
             case "twitch":
-                return "assets/icons/twitch.svg";
+                return "/assets/icons/twitch.svg";
 
             case "youtube":
-                return "assets/icons/youtube.svg";
+                return "/assets/icons/youtube.svg";
 
             case "kick":
-                return "assets/icons/kick.svg";
+                return "/assets/icons/kick.svg";
 
             default:
                 return "";

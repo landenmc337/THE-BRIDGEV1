@@ -25,12 +25,12 @@ function createBadges(data) {
         for (const [badge, version] of Object.entries(data.badges)) {
 
             const badgePath = AssetManager.getBadge(
-                data.platform,
-                badge,
-                version,
-                data.channelId
-            );
-
+    data.platform,
+    badge,
+    version,
+    data.channelId,
+    data.overlayId
+);
             if (!badgePath) continue;
 
             html += `

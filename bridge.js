@@ -7,6 +7,7 @@ const http = require("http");
 const SevenTVClient = require("./7tv");
 const TwitchAuth = require("./auth/twitch");
 const TwitchCallback = require("./auth/callback");
+const Account = require("./data/account");
 const db = require("./database");
 
 class Bridge extends EventEmitter {
@@ -16,12 +17,13 @@ class Bridge extends EventEmitter {
         super();
 
         this.broadcasterId = null;
+        this.broadcasters = new Map();
+        this.defaultOverlayId = null;
 
         const PORT = process.env.PORT || 3000;
 
         this.app = express();
 
-        // Serve files
         this.app.use(express.static(__dirname));
 
         console.log("__dirname:", __dirname);
@@ -46,6 +48,42 @@ class Bridge extends EventEmitter {
         this.app.get("/", (req, res) => {
             res.sendFile(path.join(__dirname, "overlay.html"));
         });
+        this.app.get("/overlay/:login", async (req, res) => {
+
+    try {
+
+        const login = req.params.login.toLowerCase();
+
+        const account =
+            await Account.loadByLogin(login);
+
+        if (!account) {
+
+            return res.status(404).send(`
+                <h2>The Bridge4K</h2>
+                <p>Overlay not found.</p>
+            `);
+
+        }
+
+        res.sendFile(
+            path.join(__dirname, "overlay.html")
+        );
+
+    } catch (err) {
+
+        console.error(
+            "❌ Failed to load overlay:",
+            err
+        );
+
+        res.status(500).send(
+            "Failed to load overlay."
+        );
+
+    }
+
+});
 
         const fs = require("fs");
 
@@ -78,7 +116,10 @@ class Bridge extends EventEmitter {
         // Twitch OAuth Callback
         // ============================
 
-        this.app.get("/auth/twitch/callback", TwitchCallback);
+        this.app.get(
+            "/auth/twitch/callback",
+            TwitchCallback
+        );
 
         // ============================
 
@@ -87,23 +128,93 @@ class Bridge extends EventEmitter {
         this.wss = new WebSocket.Server({ server });
 
         server.listen(PORT, () => {
-            console.log(`The Bridge4K running on port ${PORT}`);
+            console.log(
+                `The Bridge4K running on port ${PORT}`
+            );
         });
 
-        this.wss.on("connection", (ws) => {
+        // ============================
+        // WebSocket Connections
+        // ============================
+
+        this.wss.on("connection", async (ws, req) => {
 
             console.log("🖥 Overlay Connected");
 
-            if (this.broadcasterId) {
+            try {
 
-                ws.send(JSON.stringify({
-                    type: "init",
-                    userId: this.broadcasterId
-                }));
+                const url = new URL(
+                    req.url,
+                    `http://${req.headers.host || "localhost"}`
+                );
+
+                let overlayId =
+    url.searchParams.get("overlayId");
+
+if (!overlayId) {
+
+    const match =
+        url.pathname.match(/^\/overlay\/([^/]+)$/);
+
+    if (match) {
+
+        const login =
+            match[1].toLowerCase();
+
+        const account =
+            await Account.loadByLogin(login);
+
+        if (account) {
+            overlayId = account.overlayId;
+        }
+
+    }
+
+}
+
+                // Keep the existing root overlay working.
+                if (!overlayId) {
+                    overlayId = this.defaultOverlayId;
+                }
+
+                ws.overlayId = overlayId;
+
+                console.log(
+                    "🎯 Overlay ID:",
+                    overlayId || "none"
+                );
+
+                if (overlayId) {
+
+                    const broadcasterId =
+                        this.broadcasters.get(overlayId);
+
+                    if (broadcasterId) {
+
+                        ws.send(JSON.stringify({
+                            type: "init",
+                            userId: broadcasterId,
+                            overlayId
+                        }));
+
+                    }
+
+                }
+
+            } catch (err) {
+
+                console.error(
+                    "❌ WebSocket initialization failed:",
+                    err
+                );
 
             }
 
         });
+
+        // ============================
+        // Message Routing
+        // ============================
 
         this.on("message", (data) => {
 
@@ -111,13 +222,62 @@ class Bridge extends EventEmitter {
 
             this.wss.clients.forEach((client) => {
 
-                if (client.readyState === WebSocket.OPEN) {
-                    client.send(payload);
+                if (
+                    client.readyState !== WebSocket.OPEN
+                ) {
+                    return;
                 }
+
+                // Only send the message to the
+                // overlay belonging to this account.
+                if (
+                    data.overlayId &&
+                    client.overlayId !== data.overlayId
+                ) {
+                    return;
+                }
+
+                client.send(payload);
 
             });
 
         });
+
+        // ============================
+        // Load Default Account
+        // ============================
+
+        this.loadDefaultAccount();
+
+    }
+
+    async loadDefaultAccount() {
+
+        try {
+
+            const accounts =
+                await Account.loadAll();
+
+            if (accounts.length > 0) {
+
+                this.defaultOverlayId =
+                    accounts[0].overlayId;
+
+                console.log(
+                    "🎯 Default overlay:",
+                    this.defaultOverlayId
+                );
+
+            }
+
+        } catch (err) {
+
+            console.error(
+                "❌ Failed to load default account:",
+                err
+            );
+
+        }
 
     }
 
@@ -126,58 +286,136 @@ class Bridge extends EventEmitter {
         this.emit("message", {
 
             type: data.type,
-            platform: data.platform,
-            username: data.username,
-            color: data.color || "#ffffff",
-            text: data.text,
-            badges: data.badges || {},
-            emotes: data.emotes || {},
-            channelId: data.channelId || "",
-            userId: data.userId || "",
 
-            sevenTV: data.sevenTV || {
-                paint: null,
-                badge: null,
-                effects: [],
-                raw: null
-            },
+            platform:
+                data.platform,
 
-            timestamp: Date.now()
+            overlayId:
+                data.overlayId || null,
+
+            username:
+                data.username,
+
+            color:
+                data.color || "#ffffff",
+
+            text:
+                data.text,
+
+            badges:
+                data.badges || {},
+
+            emotes:
+                data.emotes || {},
+
+            channelId:
+                data.channelId || "",
+
+            userId:
+                data.userId || "",
+
+            sevenTV:
+                data.sevenTV || {
+                    paint: null,
+                    badge: null,
+                    effects: [],
+                    raw: null
+                },
+
+            timestamp:
+                Date.now()
 
         });
 
     }
 
-    setBroadcasterId(id) {
+    setBroadcasterId(id, overlayId = null) {
 
-        this.broadcasterId = id;
+        if (overlayId) {
+
+            this.broadcasters.set(
+                overlayId,
+                id
+            );
+
+            console.log(
+                `📺 Broadcaster mapped: ${overlayId} → ${id}`
+            );
+
+        } else {
+
+            // Legacy fallback for the current account.
+            this.broadcasterId = id;
+
+        }
 
         this.send({
+
             type: "init",
-            userId: id
+
+            userId: id,
+
+            overlayId
+
         });
 
     }
 
 }
+
+// ============================
+// Database Connection
+// ============================
+
 (async () => {
+
     try {
-        const result = await db.query("SELECT NOW()");
-        console.log("✅ Connected to Postgres!");
-        console.log(result.rows[0]);
+
+        const result =
+            await db.query("SELECT NOW()");
+
+        console.log(
+            "✅ Connected to Postgres!"
+        );
+
+        console.log(
+            result.rows[0]
+        );
+
     } catch (err) {
-        console.error("❌ Postgres connection failed:");
+
+        console.error(
+            "❌ Postgres connection failed:"
+        );
+
         console.error(err);
+
     }
+
 })();
+
+// ============================
+// Bridge
+// ============================
 
 const bridge = new Bridge();
 
-const sevenTV = new SevenTVClient(205072512);
+bridge.loadDefaultAccount();
+
+// ============================
+// 7TV
+// ============================
+
+const sevenTV =
+    new SevenTVClient(205072512);
+
 sevenTV.connect();
 
 module.exports = bridge;
 
+// ============================
 // Load Platforms
+// ============================
+
 require("./platforms/twitch");
 require("./platforms/youtube");

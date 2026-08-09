@@ -1,15 +1,27 @@
 const AssetManager = {
 
-    getBadge(platform, badge, version, channelId = null) {
+    getBadge(
+        platform,
+        badge,
+        version,
+        channelId = null,
+        overlayId = null
+    ) {
 
-        platform = PlatformManager.normalize(platform);
+        platform =
+            PlatformManager.normalize(platform);
 
         // --------------------------
         // YouTube Badges
         // --------------------------
+
         if (platform === "youtube") {
 
-            const ytBadge = YouTubeBadgeManager.get(channelId, badge);
+            const ytBadge =
+                YouTubeBadgeManager.get(
+                    channelId,
+                    badge
+                );
 
             if (ytBadge) {
                 return ytBadge;
@@ -22,26 +34,27 @@ const AssetManager = {
         // --------------------------
         // Twitch Subscriber Badges
         // --------------------------
-        if (platform === "twitch" && badge === "subscriber") {
 
-            let value = parseInt(version, 10);
+        if (
+            platform === "twitch" &&
+            badge === "subscriber"
+        ) {
+
+            let value =
+                parseInt(version, 10);
 
             if (isNaN(value)) {
                 return "";
             }
 
-            // Determine badge tier.
-            // Examples:
-            // 3      -> tier 0
-            // 2006   -> tier 2000
-            // 3066   -> tier 3000
-            const tier = Math.floor(value / 1000) * 1000;
+            const tier =
+                Math.floor(value / 1000) * 1000;
 
-            let month = tier > 0
-                ? value - tier
-                : value;
+            let month =
+                tier > 0
+                    ? value - tier
+                    : value;
 
-            // Base badge should always be used for month 1.
             if (month === 1) {
                 month = 0;
             }
@@ -53,11 +66,13 @@ const AssetManager = {
                         ? String(tier + month)
                         : String(month);
 
-                const badgePath = BadgeManager.exists(
-                    platform,
-                    badge,
-                    lookupVersion
-                );
+                const badgePath =
+                    BadgeManager.exists(
+                        platform,
+                        badge,
+                        lookupVersion,
+                        overlayId
+                    );
 
                 if (badgePath) {
                     return badgePath;
@@ -74,10 +89,12 @@ const AssetManager = {
         // --------------------------
         // Everything Else
         // --------------------------
+
         return BadgeManager.get(
             platform,
             badge,
-            version
+            version,
+            overlayId
         );
 
     },

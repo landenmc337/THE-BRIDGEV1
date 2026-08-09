@@ -1,48 +1,100 @@
 const RelaySettings = (() => {
 
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(
+        window.location.search
+    );
 
     return {
 
-        channel: params.get("channel") || "deeno4k",
+        channel:
+            params.get("channel") || "deeno4k",
 
-        fontSize: Number(params.get("font")) || 32,
-        fadeTime: Number(params.get("fade")) || 45,
+        // ===============================
+        // Appearance
+        // ===============================
 
-        badgeSize: Number(params.get("badgeSize")) || 40,
-        emoteSize: Number(params.get("emoteSize")) || 72,
+        fontSize:
+            Number(params.get("fontSize"))
+            || Number(params.get("font"))
+            || 32,
 
-        align: params.get("align") || "left",
+        bubbleColor:
+            params.get("bubbleColor")
+            || "#27272A",
 
-        layout: (params.get("layout") || "classic").toLowerCase(),
+        showBubble:
+            params.get("showBubble") !== "false",
 
-        theme: (params.get("theme") || "default").toLowerCase(),
+        showPlatformIcons:
+            params.get("showPlatformIcons") !== "false",
 
-        x: Number(params.get("x")) || 20,
-        y: Number(params.get("y")) || 20,
+        fadeTime:
+            Number(params.get("fade"))
+            || 45,
 
-        textColor: params.get("textColor") || "#FFFFFF",
+        badgeSize:
+    Number(params.get("fontSize"))
+    || 30,
 
-        shadowColor: params.get("shadowColor") || "rgba(0,0,0,.9)",
+        emoteSize:
+            Number(params.get("emoteSize"))
+            || 72,
 
-        shadowBlur: Number(params.get("shadowBlur")) || 8,
+        align:
+            params.get("align")
+            || "left",
+
+        layout:
+            (params.get("layout") || "classic")
+                .toLowerCase(),
+
+        theme:
+            (params.get("theme") || "default")
+                .toLowerCase(),
+
+        x:
+            Number(params.get("x"))
+            || 20,
+
+        y:
+            Number(params.get("y"))
+            || 20,
+
+        textColor:
+            params.get("textColor")
+            || "#FFFFFF",
+
+        shadowColor:
+            params.get("shadowColor")
+            || "rgba(0,0,0,.9)",
+
+        shadowBlur:
+            Number(params.get("shadowBlur"))
+            || 8,
 
         // ===============================
         // Chat Filters
         // ===============================
 
-        hideBots: params.get("hideBots") === "true",
+        hideBots:
+            params.get("hideBots") === "true",
 
-        hideCommands: params.get("hideCommands") === "true",
+        hideCommands:
+            params.get("hideCommands") === "true",
 
-        commandPrefix: params.get("commandPrefix") || "!",
+        commandPrefix:
+            params.get("commandPrefix")
+            || "!",
 
-        hiddenUsers: (
-            params.get("hiddenUsers") || ""
-        )
-            .split(",")
-            .map(user => user.trim().toLowerCase())
-            .filter(Boolean)
+        hiddenUsers:
+            (
+                params.get("hiddenUsers") || ""
+            )
+                .split(",")
+                .map(user =>
+                    user.trim().toLowerCase()
+                )
+                .filter(Boolean)
 
     };
 

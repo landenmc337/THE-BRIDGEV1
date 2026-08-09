@@ -13,6 +13,7 @@ const pool = new Pool({
         await pool.query(`
             CREATE TABLE IF NOT EXISTS accounts (
                 id SERIAL PRIMARY KEY,
+                overlay_id TEXT NOT NULL UNIQUE,
                 display_name TEXT NOT NULL,
                 login TEXT NOT NULL UNIQUE,
                 user_id TEXT NOT NULL UNIQUE,
