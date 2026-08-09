@@ -6,9 +6,16 @@ const root = document.documentElement;
 // Appearance Settings
 // ===============================
 
+const liveFont =
+    RelaySettings.font === "Segoe UI (Chatterino)"
+        ? '"Segoe UI", sans-serif'
+        : RelaySettings.font === "Impact"
+            ? "Impact, sans-serif"
+            : `"${RelaySettings.font}"`;
+
 root.style.setProperty(
     "--chat-font",
-    `"${RelaySettings.font}"`
+    liveFont
 );
 
 console.log("🎨 Live font:", RelaySettings.font);
