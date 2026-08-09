@@ -8,10 +8,11 @@ const root = document.documentElement;
 
 root.style.setProperty(
     "--chat-font",
-    RelaySettings.font
+    `"${RelaySettings.font}"`
 );
 
 console.log("🎨 Live font:", RelaySettings.font);
+
 console.log(
     "🎨 CSS font:",
     getComputedStyle(document.documentElement)
