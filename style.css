@@ -78,15 +78,11 @@ body {
     vertical-align: baseline;
 
     filter:
-    drop-shadow(-2px -2px 0 #000)
-    drop-shadow(2px -2px 0 #000)
-    drop-shadow(-2px 2px 0 #000)
-    drop-shadow(2px 2px 0 #000)
-    drop-shadow(-2px 0 0 #000)
-    drop-shadow(2px 0 0 #000)
-    drop-shadow(0 -2px 0 #000)
-    drop-shadow(0 2px 0 #000)
-    drop-shadow(0 4px 5px rgba(0,0,0,.45));
+        drop-shadow(-1px -1px 1px rgba(0,0,0,.45))
+        drop-shadow(1px -1px 1px rgba(0,0,0,.45))
+        drop-shadow(-1px 1px 1px rgba(0,0,0,.45))
+        drop-shadow(1px 1px 1px rgba(0,0,0,.45))
+        drop-shadow(0 3px 5px rgba(0,0,0,.35));
 }
 
 .text {
@@ -104,11 +100,11 @@ body {
     white-space: pre-wrap;
 
     filter:
-        drop-shadow(-2px -2px 0 #000)
-        drop-shadow(2px -2px 0 #000)
-        drop-shadow(-2px 2px 0 #000)
-        drop-shadow(2px 2px 0 #000)
-        drop-shadow(0 3px 6px rgba(0,0,0,.95));
+        drop-shadow(-1px -1px 1px rgba(0,0,0,.45))
+        drop-shadow(1px -1px 1px rgba(0,0,0,.45))
+        drop-shadow(-1px 1px 1px rgba(0,0,0,.45))
+        drop-shadow(1px 1px 1px rgba(0,0,0,.45))
+        drop-shadow(0 3px 5px rgba(0,0,0,.35));
 }
 
 #chat {
@@ -161,14 +157,14 @@ body {
 }
 
 .platform-icon {
-    width: var(--platform-size);
-    height: var(--platform-size);
+    width: min(var(--platform-size), 24px) !important;
+    height: min(var(--platform-size), 24px) !important;
 
     flex-shrink: 0;
     display: block;
 
     position: relative;
-    top: 6px;
+    top: 4px;
 
     opacity: var(--show-platform-icons);
 }
@@ -182,24 +178,34 @@ body {
 }
 
 .badge {
-    width: var(--badge-size);
-    height: var(--badge-size);
+    width: min(var(--badge-size), 28px) !important;
+    height: min(var(--badge-size), 28px) !important;
+
+    max-width: 28px !important;
+    max-height: 28px !important;
 
     display: block;
 
     position: relative;
     top: 3.5px;
+
+    object-fit: contain;
 }
 
 /* 7TV badges */
 .seventv-badge {
-    width: var(--badge-size);
-    height: var(--badge-size);
+    width: min(var(--badge-size), 28px) !important;
+    height: min(var(--badge-size), 28px) !important;
+
+    max-width: 28px !important;
+    max-height: 28px !important;
 
     display: block;
 
     position: relative;
     top: 3.5px;
+
+    object-fit: contain;
 }
 
 .message-content {
