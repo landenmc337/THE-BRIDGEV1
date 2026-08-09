@@ -1,11 +1,9 @@
 const RelaySettings = (() => {
-
     const params = new URLSearchParams(
         window.location.search
     );
 
     return {
-
         channel:
             params.get("channel") || "deeno4k",
 
@@ -13,9 +11,12 @@ const RelaySettings = (() => {
         // Appearance
         // ===============================
 
+        font:
+            params.get("font")
+            || "Segoe UI (Chatterino)",
+
         fontSize:
             Number(params.get("fontSize"))
-            || Number(params.get("font"))
             || 32,
 
         bubbleColor:
@@ -32,9 +33,10 @@ const RelaySettings = (() => {
             Number(params.get("fade"))
             || 45,
 
+        // Badge size follows font size
         badgeSize:
-    Number(params.get("fontSize"))
-    || 30,
+            Number(params.get("fontSize"))
+            || 32,
 
         emoteSize:
             Number(params.get("emoteSize"))
@@ -45,9 +47,9 @@ const RelaySettings = (() => {
             || "left",
 
         layout:
-    params.get("showBubble") === "true"
-        ? "bubble"
-        : "classic",
+            params.get("showBubble") === "true"
+                ? "bubble"
+                : "classic",
 
         theme:
             (params.get("theme") || "default")
@@ -96,7 +98,5 @@ const RelaySettings = (() => {
                     user.trim().toLowerCase()
                 )
                 .filter(Boolean)
-
     };
-
 })();
