@@ -11,9 +11,16 @@ function createPlatform(data) {
         return "";
     }
 
-    return `<img class="platform-icon" src="${icon}" alt="${data.platform}">`;
-
+    return `
+        <img
+            class="platform-icon"
+            src="${icon}"
+            alt="${data.platform}"
+            draggable="false"
+        >
+    `;
 }
+
 
 function createBadges(data) {
 
@@ -25,12 +32,13 @@ function createBadges(data) {
         for (const [badge, version] of Object.entries(data.badges)) {
 
             const badgePath = AssetManager.getBadge(
-    data.platform,
-    badge,
-    version,
-    data.channelId,
-    data.overlayId
-);
+                data.platform,
+                badge,
+                version,
+                data.channelId,
+                data.overlayId
+            );
+
             if (!badgePath) continue;
 
             html += `
@@ -39,17 +47,22 @@ function createBadges(data) {
                     src="${badgePath}"
                     alt="${badge}"
                     title="${badge}"
-                >`;
-
+                    loading="lazy"
+                    decoding="async"
+                    draggable="false"
+                >
+            `;
         }
-
     }
+
 
     // 7TV Badge
     if (data.sevenTV?.badge?.images?.length) {
 
         const badgeUrl =
-            data.sevenTV.badge.images.find(img => img.scale === 4)?.url ??
+            data.sevenTV.badge.images.find(
+                img => img.scale === 4
+            )?.url ??
             data.sevenTV.badge.images[0].url;
 
         html += `
@@ -58,92 +71,217 @@ function createBadges(data) {
                 src="${badgeUrl}"
                 alt="${data.sevenTV.badge.name}"
                 title="${data.sevenTV.badge.name}"
-            >`;
-
+                loading="lazy"
+                decoding="async"
+                draggable="false"
+            >
+        `;
     }
+
 
     html += "</span>";
 
-    return html === '<span class="badges"></span>' ? "" : html;
-
+    return html === '<span class="badges"></span>'
+        ? ""
+        : html;
 }
+
 
 function getFallbackColor(username) {
 
     let hash = 0;
 
     for (const char of username.toLowerCase()) {
-        hash = (hash * 31 + char.charCodeAt(0)) | 0;
+
+        hash =
+            (hash * 31 + char.charCodeAt(0)) |
+            0;
     }
 
-    const hue = Math.abs(hash) % 360;
+    const hue =
+        Math.abs(hash) % 360;
 
     return `hsl(${hue}, 65%, 62%)`;
-
 }
+
 
 function createUsername(data) {
 
-    const style = window.buildPaint
-        ? window.buildPaint(data.sevenTV?.paint)
-        : null;
+    const style =
+        window.buildPaint
+            ? window.buildPaint(
+                data.sevenTV?.paint
+            )
+            : null;
+
 
     const css = style
         ? Object.entries(style)
-            .map(([key, value]) =>
-                `${key.replace(/[A-Z]/g, m => "-" + m.toLowerCase())}:${value}`)
+            .map(
+                ([key, value]) =>
+                    `${key.replace(
+                        /[A-Z]/g,
+                        m => "-" + m.toLowerCase()
+                    )}:${value}`
+            )
             .join(";")
         : "";
 
-    const usernameColor = data.color || getFallbackColor(data.username);
-    const colorStyle = `color:${usernameColor};`;
 
-    return `<span class="username" style="${colorStyle}${css}">${data.username}:</span>`;
+    const usernameColor =
+        data.color ||
+        getFallbackColor(
+            data.username
+        );
 
+
+    const colorStyle =
+        `color:${usernameColor};`;
+
+
+    return `
+        <span
+            class="username"
+            style="${colorStyle}${css}"
+        >
+            ${data.username}:
+        </span>
+    `;
 }
+
 
 function createText(data) {
 
-    let html = data.text || "";
+    let html =
+        data.text || "";
 
-    if (typeof EmoteManager !== "undefined") {
-        html = EmoteManager.process(html, data.emotes);
+
+    // Twitch emotes
+    if (
+        typeof EmoteManager !==
+        "undefined"
+    ) {
+
+        html =
+            EmoteManager.process(
+                html,
+                data.emotes
+            );
     }
 
-    if (typeof SevenTVManager !== "undefined") {
-        html = SevenTVManager.process(html);
+
+    // 7TV emotes
+    if (
+        typeof SevenTVManager !==
+        "undefined"
+    ) {
+
+        html =
+            SevenTVManager.process(
+                html
+            );
     }
 
-    return `<span class="text">${html}</span>`;
 
+    return `
+        <span class="text">
+            ${html}
+        </span>
+    `;
 }
+
+
+// ============================================
+// Message Limit
+// ============================================
+
+const MAX_MESSAGES = 50;
+
+
+// ============================================
+// Add Message
+// ============================================
 
 function addMessage(data) {
 
-    const chat = document.getElementById("chat");
+    const chat =
+        document.getElementById(
+            "chat"
+        );
+
 
     if (!chat) {
-        console.error("Chat container not found.");
+
+        console.error(
+            "Chat container not found."
+        );
+
         return;
     }
 
+
     const layoutName =
-    RelaySettings.showBubble
-        ? "bubble"
-        : "classic";
+        RelaySettings.showBubble
+            ? "bubble"
+            : "classic";
 
-    const html = Layouts[layoutName](data);
 
-    const message = document.createElement("div");
+    const html =
+        Layouts[layoutName](data);
 
-    message.className = `message layout-${layoutName} new-message`;
 
-    message.innerHTML = html;
+    const message =
+        document.createElement(
+            "div"
+        );
 
-    chat.appendChild(message);
 
-    if (typeof playMessageAnimation === "function") {
-        playMessageAnimation(message);
+    message.className =
+        `message layout-${layoutName} new-message`;
+
+
+    message.innerHTML =
+        html;
+
+
+    chat.appendChild(
+        message
+    );
+
+
+    // ========================================
+    // Remove old messages
+    // ========================================
+
+    while (
+        chat.children.length >
+        MAX_MESSAGES
+    ) {
+
+        const oldestMessage =
+            chat.firstElementChild;
+
+
+        if (!oldestMessage) {
+            break;
+        }
+
+
+        oldestMessage.remove();
     }
 
+
+    // ========================================
+    // Play animation
+    // ========================================
+
+    if (
+        typeof playMessageAnimation ===
+        "function"
+    ) {
+
+        playMessageAnimation(
+            message
+        );
+    }
 }
