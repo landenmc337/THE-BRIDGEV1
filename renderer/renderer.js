@@ -11,14 +11,7 @@ function createPlatform(data) {
         return "";
     }
 
-    return `
-        <img
-            class="platform-icon"
-            src="${icon}"
-            alt="${data.platform}"
-            draggable="false"
-        >
-    `;
+    return `<img class="platform-icon" src="${icon}" alt="${data.platform}">`;
 }
 
 
@@ -47,11 +40,8 @@ function createBadges(data) {
                     src="${badgePath}"
                     alt="${badge}"
                     title="${badge}"
-                    loading="lazy"
-                    decoding="async"
-                    draggable="false"
-                >
-            `;
+                >`;
+
         }
     }
 
@@ -71,13 +61,9 @@ function createBadges(data) {
                 src="${badgeUrl}"
                 alt="${data.sevenTV.badge.name}"
                 title="${data.sevenTV.badge.name}"
-                loading="lazy"
-                decoding="async"
-                draggable="false"
-            >
-        `;
-    }
+            >`;
 
+    }
 
     html += "</span>";
 
@@ -92,7 +78,6 @@ function getFallbackColor(username) {
     let hash = 0;
 
     for (const char of username.toLowerCase()) {
-
         hash =
             (hash * 31 + char.charCodeAt(0)) |
             0;
@@ -114,7 +99,6 @@ function createUsername(data) {
             )
             : null;
 
-
     const css = style
         ? Object.entries(style)
             .map(
@@ -127,26 +111,16 @@ function createUsername(data) {
             .join(";")
         : "";
 
-
     const usernameColor =
         data.color ||
         getFallbackColor(
             data.username
         );
 
-
     const colorStyle =
         `color:${usernameColor};`;
 
-
-    return `
-        <span
-            class="username"
-            style="${colorStyle}${css}"
-        >
-            ${data.username}:
-        </span>
-    `;
+    return `<span class="username" style="${colorStyle}${css}">${data.username}:</span>`;
 }
 
 
@@ -155,13 +129,10 @@ function createText(data) {
     let html =
         data.text || "";
 
-
-    // Twitch emotes
     if (
         typeof EmoteManager !==
         "undefined"
     ) {
-
         html =
             EmoteManager.process(
                 html,
@@ -169,33 +140,18 @@ function createText(data) {
             );
     }
 
-
-    // 7TV emotes
     if (
         typeof SevenTVManager !==
         "undefined"
     ) {
-
         html =
             SevenTVManager.process(
                 html
             );
     }
 
-
-    return `
-        <span class="text">
-            ${html}
-        </span>
-    `;
+    return `<span class="text">${html}</span>`;
 }
-
-
-// ============================================
-// Message Limit
-// ============================================
-
-const MAX_MESSAGES = 50;
 
 
 // ============================================
@@ -209,7 +165,6 @@ function addMessage(data) {
             "chat"
         );
 
-
     if (!chat) {
 
         console.error(
@@ -219,30 +174,24 @@ function addMessage(data) {
         return;
     }
 
-
     const layoutName =
         RelaySettings.showBubble
             ? "bubble"
             : "classic";
 
-
     const html =
         Layouts[layoutName](data);
-
 
     const message =
         document.createElement(
             "div"
         );
 
-
     message.className =
         `message layout-${layoutName} new-message`;
 
-
     message.innerHTML =
         html;
-
 
     chat.appendChild(
         message
@@ -250,29 +199,26 @@ function addMessage(data) {
 
 
     // ========================================
-    // Remove old messages
+    // Keep only the newest 50 messages
     // ========================================
 
     while (
-        chat.children.length >
-        MAX_MESSAGES
+        chat.children.length > 50
     ) {
 
         const oldestMessage =
             chat.firstElementChild;
 
-
         if (!oldestMessage) {
             break;
         }
-
 
         oldestMessage.remove();
     }
 
 
     // ========================================
-    // Play animation
+    // Play message animation
     // ========================================
 
     if (
