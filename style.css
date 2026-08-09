@@ -178,11 +178,8 @@ body {
 }
 
 .badge {
-    width: min(var(--badge-size), 28px) !important;
-    height: min(var(--badge-size), 28px) !important;
-
-    max-width: 28px !important;
-    max-height: 28px !important;
+    width: calc(var(--chat-font-size) * 1.18) !important;
+    height: calc(var(--chat-font-size) * 1.18) !important;
 
     display: block;
 
@@ -190,15 +187,14 @@ body {
     top: 3.5px;
 
     object-fit: contain;
+
+    flex-shrink: 0;
 }
 
 /* 7TV badges */
 .seventv-badge {
-    width: min(var(--badge-size), 28px) !important;
-    height: min(var(--badge-size), 28px) !important;
-
-    max-width: 28px !important;
-    max-height: 28px !important;
+    width: calc(var(--chat-font-size) * 1.18) !important;
+    height: calc(var(--chat-font-size) * 1.18) !important;
 
     display: block;
 
@@ -206,6 +202,8 @@ body {
     top: 3.5px;
 
     object-fit: contain;
+
+    flex-shrink: 0;
 }
 
 .message-content {
@@ -237,25 +235,25 @@ body {
 
 .emote {
     display: inline-block !important;
-    width: 76px !important;
-    height: 76px !important;
+
+    width: var(--emote-size) !important;
+    height: var(--emote-size) !important;
+
     vertical-align: middle;
     object-fit: contain;
 }
 
 .seventv-emote {
     display: inline-block !important;
-    width: 84px !important;
-    height: 84px !important;
+
+    width: var(--emote-size) !important;
+    height: var(--emote-size) !important;
 
     vertical-align: middle;
     object-fit: contain;
 
-    margin-top: 0;
-    margin-bottom: 0;
-
-    position: relative;
-    z-index: 1;
+    margin-top: -12px;
+    margin-bottom: -12px;
 }
 
 .bubble {
