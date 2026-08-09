@@ -78,15 +78,15 @@ body {
     vertical-align: baseline;
 
     filter:
-        drop-shadow(-2px -2px 0 #000)
-        drop-shadow(2px -2px 0 #000)
-        drop-shadow(-2px 2px 0 #000)
-        drop-shadow(2px 2px 0 #000)
-        drop-shadow(-2px 0 0 #000)
-        drop-shadow(2px 0 0 #000)
-        drop-shadow(0 -2px 0 #000)
-        drop-shadow(0 2px 0 #000)
-        drop-shadow(0 3px 6px rgba(0,0,0,.95));
+    drop-shadow(-2px -2px 0 #000)
+    drop-shadow(2px -2px 0 #000)
+    drop-shadow(-2px 2px 0 #000)
+    drop-shadow(2px 2px 0 #000)
+    drop-shadow(-2px 0 0 #000)
+    drop-shadow(2px 0 0 #000)
+    drop-shadow(0 -2px 0 #000)
+    drop-shadow(0 2px 0 #000)
+    drop-shadow(0 4px 5px rgba(0,0,0,.45));
 }
 
 .text {
