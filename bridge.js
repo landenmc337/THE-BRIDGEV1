@@ -4,11 +4,13 @@ const EventEmitter = require("events");
 const WebSocket = require("ws");
 const http = require("http");
 
-const SevenTVClient = require("./7tv");
 const TwitchAuth = require("./auth/twitch");
 const TwitchCallback = require("./auth/callback");
 const KickCallback = require("./auth/kickCallback");
+const YouTubeAuth = require("./auth/youtube");
+const YouTubeCallback = require("./auth/youtubeCallback");
 const Account = require("./data/account");
+const PlatformConnections = require("./data/platformConnections");
 const db = require("./database");
 
 class Bridge extends EventEmitter {
@@ -25,28 +27,31 @@ class Bridge extends EventEmitter {
             process.env.PORT || 3000;
 
         this.app = express();
-this.app.use((req, res, next) => {
-    res.header(
-        "Access-Control-Allow-Origin",
-        "http://localhost:3000"
-    );
 
-    res.header(
-        "Access-Control-Allow-Methods",
-        "GET,POST,OPTIONS"
-    );
+        this.app.use((req, res, next) => {
 
-    res.header(
-        "Access-Control-Allow-Headers",
-        "Content-Type"
-    );
+            res.header(
+                "Access-Control-Allow-Origin",
+                "http://localhost:3000"
+            );
 
-    if (req.method === "OPTIONS") {
-        return res.sendStatus(204);
-    }
+            res.header(
+                "Access-Control-Allow-Methods",
+                "GET,POST,OPTIONS"
+            );
 
-    next();
-});
+            res.header(
+                "Access-Control-Allow-Headers",
+                "Content-Type"
+            );
+
+            if (req.method === "OPTIONS") {
+                return res.sendStatus(204);
+            }
+
+            next();
+        });
+
         this.app.use(
             express.static(__dirname)
         );
@@ -178,42 +183,126 @@ this.app.use((req, res, next) => {
             }
         );
 
+
         // ============================
-// Kick Webhook
-// ============================
+        // Kick Webhook
+        // ============================
 
-this.app.post(
-    "/kick/webhook",
-    express.json(),
-    async (req, res) => {
+        this.app.post(
+            "/kick/webhook",
+            express.json(),
+            async (req, res) => {
 
-        console.log(
-            "📨 Kick Webhook:",
-            JSON.stringify(req.body, null, 2)
+                console.log(
+                    "📨 Kick Webhook:",
+                    JSON.stringify(req.body, null, 2)
+                );
+
+                try {
+
+                    const message =
+                        req.body || {};
+
+                    const broadcasterId =
+                        message.broadcaster?.user_id ??
+                        message.broadcaster?.id ??
+                        message.broadcaster_id ??
+                        message.channel?.user_id ??
+                        message.channel?.id ??
+                        null;
+
+                    const broadcasterLogin =
+                        message.broadcaster?.username ||
+                        message.broadcaster?.login ||
+                        message.channel?.username ||
+                        message.channel?.login ||
+                        null;
+
+                    let connection = null;
+
+                    if (broadcasterId !== null) {
+
+                        connection =
+                            await PlatformConnections.loadByPlatformUserId(
+                                "kick",
+                                String(broadcasterId)
+                            );
+
+                    }
+
+                    if (
+                        !connection &&
+                        broadcasterLogin
+                    ) {
+
+                        connection =
+                            await PlatformConnections.loadByPlatformLogin(
+                                "kick",
+                                broadcasterLogin
+                            );
+
+                    }
+
+                    if (!connection) {
+
+                        console.warn(
+                            "⚠️ Kick webhook could not resolve an account:",
+                            {
+                                broadcasterId,
+                                broadcasterLogin
+                            }
+                        );
+
+                        return res.sendStatus(200);
+                    }
+
+                    this.send({
+
+                        type: "message",
+
+                        platform: "kick",
+
+                        overlayId:
+                            connection.overlayId,
+
+                        username:
+                            message.sender?.username ||
+                            message.sender?.name ||
+                            "Kick User",
+
+                        text:
+                            message.content || "",
+
+                        userId:
+                            message.sender?.user_id ||
+                            message.sender?.id ||
+                            "",
+
+                        badges: {},
+
+                        emotes: {},
+
+                        timestamp:
+                            Date.now()
+
+                    });
+
+                    return res.sendStatus(200);
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ Kick webhook routing failed:",
+                        err
+                    );
+
+                    return res.sendStatus(500);
+
+                }
+
+            }
         );
 
-        const message = req.body;
-
-        this.send({
-    type: "message",
-    platform: "kick",
-    overlayId: "ovl_deeno4k",
-    username:
-        message.sender?.username ||
-        message.broadcaster?.username ||
-        "Kick User",
-    text:
-        message.content || "",
-    userId:
-        message.sender?.user_id ||
-        "",
-    badges: {},
-    emotes: {},
-    timestamp: Date.now()
-});
-        return res.sendStatus(200);
-    }
-);
 
         // ============================
         // Twitch Login
@@ -232,7 +321,22 @@ this.app.post(
 
             }
         );
+// ============================
+// YouTube OAuth Callback
+// ============================
 
+this.app.get(
+    "/youtube/callback",
+    YouTubeCallback.callback
+);
+        // ============================
+// YouTube Login
+// ============================
+
+this.app.get(
+    "/youtube/login",
+    YouTubeCallback.createLogin
+);
 
         // ============================
         // Twitch OAuth Callback
@@ -242,74 +346,91 @@ this.app.post(
             "/auth/twitch/callback",
             TwitchCallback
         );
-// ============================
-// Kick Connection Status
-// ============================
 
-this.app.get(
-    "/kick/status",
-    async (req, res) => {
 
-        try {
+        // ============================
+        // Kick Connection Status
+        // ============================
 
-            const login =
-                req.query.login;
+        this.app.get(
+            "/kick/status",
+            async (req, res) => {
 
-            if (!login) {
-                return res
-                    .status(400)
-                    .json({
-                        connected: false,
-                        error: "Missing login."
+                try {
+
+                    const login =
+                        req.query.login;
+
+                    if (!login) {
+
+                        return res
+                            .status(400)
+                            .json({
+                                connected: false,
+                                error: "Missing login."
+                            });
+
+                    }
+
+                    const account =
+                        await Account.loadByLogin(
+                            login
+                        );
+
+                    if (!account) {
+
+                        return res
+                            .status(404)
+                            .json({
+                                connected: false,
+                                error: "Account not found."
+                            });
+
+                    }
+
+                    const connection =
+                        await require(
+                            "./data/platformConnections"
+                        ).load(
+                            account.overlayId,
+                            "kick"
+                        );
+
+                    return res.json({
+
+                        connected:
+                            !!connection,
+
+                        displayName:
+                            connection?.displayName ||
+                            null,
+
+                        login:
+                            connection?.login ||
+                            null
+
                     });
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ Failed to check Kick status:",
+                        err
+                    );
+
+                    return res
+                        .status(500)
+                        .json({
+                            connected: false,
+                            error:
+                                "Failed to check Kick status."
+                        });
+
+                }
+
             }
+        );
 
-            const account =
-                await Account.loadByLogin(
-                    login
-                );
-
-            if (!account) {
-                return res
-                    .status(404)
-                    .json({
-                        connected: false,
-                        error: "Account not found."
-                    });
-            }
-
-            const connection =
-                await require(
-                    "./data/platformConnections"
-                ).load(
-                    account.overlayId,
-                    "kick"
-                );
-
-            return res.json({
-                connected: !!connection,
-                displayName:
-                    connection?.displayName || null,
-                login:
-                    connection?.login || null
-            });
-
-        } catch (err) {
-
-            console.error(
-                "❌ Failed to check Kick status:",
-                err
-            );
-
-            return res
-                .status(500)
-                .json({
-                    connected: false,
-                    error: "Failed to check Kick status."
-                });
-        }
-    }
-);
 
         // ============================
         // Kick Login
@@ -445,10 +566,14 @@ this.app.get(
 
                             ws.send(
                                 JSON.stringify({
+
                                     type: "init",
+
                                     userId:
                                         broadcasterId,
+
                                     overlayId
+
                                 })
                             );
 
@@ -489,7 +614,9 @@ this.app.get(
                             client.readyState !==
                             WebSocket.OPEN
                         ) {
+
                             return;
+
                         }
 
 
@@ -706,18 +833,6 @@ const bridge =
     new Bridge();
 
 bridge.loadDefaultAccount();
-
-
-// ============================
-// 7TV
-// ============================
-
-const sevenTV =
-    new SevenTVClient(
-        205072512
-    );
-
-sevenTV.connect();
 
 
 // ============================

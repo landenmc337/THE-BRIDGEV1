@@ -124,7 +124,7 @@ export default function App() {
 >
     <div className="mb-2">
       <span className="font-bold text-cyan-400">
-        Deeno4K:
+        Streamer:
       </span>{" "}
       <span>Hello everyone 👋</span>
     </div>

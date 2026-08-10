@@ -1,11 +1,28 @@
 const RelaySettings = (() => {
-    const params = new URLSearchParams(
-        window.location.search
-    );
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    const pathParts =
+        window.location.pathname
+            .split("/")
+            .filter(Boolean);
+
+    const overlayLogin =
+        pathParts[0]?.toLowerCase() === "overlay"
+            ? pathParts[1]?.toLowerCase()
+            : null;
+
+    const channel =
+        params.get("channel") ||
+        overlayLogin ||
+        null;
 
     return {
-        channel:
-            params.get("channel") || "deeno4k",
+
+        channel,
 
         // ===============================
         // Appearance
@@ -98,5 +115,7 @@ const RelaySettings = (() => {
                     user.trim().toLowerCase()
                 )
                 .filter(Boolean)
+
     };
+
 })();

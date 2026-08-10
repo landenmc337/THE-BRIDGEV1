@@ -11,7 +11,6 @@ async function downloadImage(
     destination,
     overwrite = false
 ) {
-
     if (
         !overwrite &&
         await fs.pathExists(destination)
@@ -35,12 +34,9 @@ async function downloadImage(
     response.data.pipe(writer);
 
     await new Promise((resolve, reject) => {
-
         writer.on("finish", resolve);
         writer.on("error", reject);
-
     });
-
 }
 
 async function downloadBadgeSet(
@@ -48,7 +44,6 @@ async function downloadBadgeSet(
     rootFolder,
     overwrite = false
 ) {
-
     for (const badgeSet of data) {
 
         const badgeFolder =
@@ -78,11 +73,8 @@ async function downloadBadgeSet(
             console.log(
                 `✅ ${badgeSet.set_id}/${version.id}.png`
             );
-
         }
-
     }
-
 }
 
 async function downloadGlobalBadges(token) {
@@ -123,7 +115,6 @@ async function downloadGlobalBadges(token) {
         folder,
         false
     );
-
 }
 
 async function downloadChannelBadges(
@@ -184,11 +175,10 @@ async function downloadChannelBadges(
         folder,
         true
     );
-
 }
 
 async function downloadBadges(
-    username = "deeno4k",
+    username,
     overlayId = null
 ) {
 
@@ -234,19 +224,10 @@ async function downloadBadges(
             );
 
         }
-
     }
-
 }
 
 module.exports = {
     downloadBadges,
     downloadChannelBadges
 };
-
-if (require.main === module) {
-
-    downloadBadges()
-        .catch(console.error);
-
-}

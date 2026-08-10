@@ -1,6 +1,5 @@
 const db = require("../database");
 
-
 // ============================================================
 // Save Platform Connection
 // ============================================================
@@ -44,7 +43,6 @@ async function save(connection) {
     );
 }
 
-
 // ============================================================
 // Load One Platform Connection
 // ============================================================
@@ -72,14 +70,18 @@ async function load(
     if (
         result.rows.length === 0
     ) {
+
         return null;
+
     }
 
     const connection =
         result.rows[0];
 
     return {
-        id: connection.id,
+
+        id:
+            connection.id,
 
         overlayId:
             connection.overlay_id,
@@ -104,9 +106,143 @@ async function load(
 
         connectedAt:
             connection.connected_at
+
     };
 }
 
+// ============================================================
+// Load By Platform User ID
+// ============================================================
+
+async function loadByPlatformUserId(
+    platform,
+    platformUserId
+) {
+
+    const result =
+        await db.query(
+            `
+            SELECT *
+            FROM platform_connections
+            WHERE platform = $1
+              AND platform_user_id = $2
+            LIMIT 1
+            `,
+            [
+                platform,
+                String(platformUserId)
+            ]
+        );
+
+    if (
+        result.rows.length === 0
+    ) {
+
+        return null;
+
+    }
+
+    const connection =
+        result.rows[0];
+
+    return {
+
+        id:
+            connection.id,
+
+        overlayId:
+            connection.overlay_id,
+
+        platform:
+            connection.platform,
+
+        platformUserId:
+            connection.platform_user_id,
+
+        displayName:
+            connection.display_name,
+
+        login:
+            connection.login,
+
+        accessToken:
+            connection.access_token,
+
+        refreshToken:
+            connection.refresh_token,
+
+        connectedAt:
+            connection.connected_at
+
+    };
+}
+
+// ============================================================
+// Load By Platform Login
+// ============================================================
+
+async function loadByPlatformLogin(
+    platform,
+    login
+) {
+
+    const result =
+        await db.query(
+            `
+            SELECT *
+            FROM platform_connections
+            WHERE platform = $1
+              AND LOWER(login) = LOWER($2)
+            LIMIT 1
+            `,
+            [
+                platform,
+                login
+            ]
+        );
+
+    if (
+        result.rows.length === 0
+    ) {
+
+        return null;
+
+    }
+
+    const connection =
+        result.rows[0];
+
+    return {
+
+        id:
+            connection.id,
+
+        overlayId:
+            connection.overlay_id,
+
+        platform:
+            connection.platform,
+
+        platformUserId:
+            connection.platform_user_id,
+
+        displayName:
+            connection.display_name,
+
+        login:
+            connection.login,
+
+        accessToken:
+            connection.access_token,
+
+        refreshToken:
+            connection.refresh_token,
+
+        connectedAt:
+            connection.connected_at
+
+    };
+}
 
 // ============================================================
 // Load All Connections For Overlay
@@ -129,7 +265,9 @@ async function loadByOverlayId(
 
     return result.rows.map(
         connection => ({
-            id: connection.id,
+
+            id:
+                connection.id,
 
             overlayId:
                 connection.overlay_id,
@@ -154,10 +292,10 @@ async function loadByOverlayId(
 
             connectedAt:
                 connection.connected_at
+
         })
     );
 }
-
 
 // ============================================================
 // Delete Platform Connection
@@ -181,10 +319,11 @@ async function remove(
     );
 }
 
-
 module.exports = {
     save,
     load,
+    loadByPlatformUserId,
+    loadByPlatformLogin,
     loadByOverlayId,
     remove
 };
