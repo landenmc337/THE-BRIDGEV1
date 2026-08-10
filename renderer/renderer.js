@@ -155,6 +155,33 @@ function createText(data) {
 
 
 // ============================================
+// Fade Timer
+// ============================================
+
+function getFadeTimer() {
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    const value =
+        Number(
+            params.get("fadeTimer")
+        );
+
+    if (
+        !Number.isFinite(value) ||
+        value <= 0
+    ) {
+        return 0;
+    }
+
+    return value;
+}
+
+
+// ============================================
 // Add Message
 // ============================================
 
@@ -199,11 +226,11 @@ function addMessage(data) {
 
 
     // ========================================
-    // Keep only the newest 50 messages
+    // Keep only the newest 20 messages
     // ========================================
 
     while (
-        chat.children.length > 50
+        chat.children.length > 20
     ) {
 
         const oldestMessage =
@@ -229,5 +256,45 @@ function addMessage(data) {
         playMessageAnimation(
             message
         );
+    }
+
+
+    // ========================================
+    // Fade Timer
+    // ========================================
+
+    const fadeTimer =
+        getFadeTimer();
+
+    if (fadeTimer > 0) {
+
+        setTimeout(() => {
+
+            // Make sure the message
+            // is still in the chat.
+            if (
+                !message.isConnected
+            ) {
+                return;
+            }
+
+            message.classList.add(
+                "fade-out"
+            );
+
+
+            // Match the CSS transition
+            // duration before removing it.
+            setTimeout(() => {
+
+                if (
+                    message.isConnected
+                ) {
+                    message.remove();
+                }
+
+            }, 450);
+
+        }, fadeTimer * 1000);
     }
 }
