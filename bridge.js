@@ -7,6 +7,7 @@ const http = require("http");
 const SevenTVClient = require("./7tv");
 const TwitchAuth = require("./auth/twitch");
 const TwitchCallback = require("./auth/callback");
+const KickCallback = require("./auth/kickCallback");
 const Account = require("./data/account");
 const db = require("./database");
 
@@ -20,97 +21,199 @@ class Bridge extends EventEmitter {
         this.broadcasters = new Map();
         this.defaultOverlayId = null;
 
-        const PORT = process.env.PORT || 3000;
+        const PORT =
+            process.env.PORT || 3000;
 
         this.app = express();
+this.app.use((req, res, next) => {
+    res.header(
+        "Access-Control-Allow-Origin",
+        "http://localhost:3000"
+    );
 
-        this.app.use(express.static(__dirname));
+    res.header(
+        "Access-Control-Allow-Methods",
+        "GET,POST,OPTIONS"
+    );
 
-        console.log("__dirname:", __dirname);
+    res.header(
+        "Access-Control-Allow-Headers",
+        "Content-Type"
+    );
 
-        this.app.use((req, res, next) => {
-            console.log(req.method, req.url);
-            next();
-        });
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+    }
+
+    next();
+});
+        this.app.use(
+            express.static(__dirname)
+        );
+
+        console.log(
+            "__dirname:",
+            __dirname
+        );
+
+        this.app.use(
+            (req, res, next) => {
+
+                console.log(
+                    req.method,
+                    req.url
+                );
+
+                next();
+
+            }
+        );
+
 
         // ============================
         // Test Route
         // ============================
 
-        this.app.get("/test", (req, res) => {
-            res.send("Express is working!");
-        });
+        this.app.get(
+            "/test",
+            (req, res) => {
+
+                res.send(
+                    "Express is working!"
+                );
+
+            }
+        );
+
 
         // ============================
         // Overlay
         // ============================
 
-        this.app.get("/", (req, res) => {
-            res.sendFile(path.join(__dirname, "overlay.html"));
-        });
-        this.app.get("/overlay/:login", async (req, res) => {
+        this.app.get(
+            "/",
+            (req, res) => {
 
-    try {
+                res.sendFile(
+                    path.join(
+                        __dirname,
+                        "overlay.html"
+                    )
+                );
 
-        const login = req.params.login.toLowerCase();
-
-        const account =
-            await Account.loadByLogin(login);
-
-        if (!account) {
-
-            return res.status(404).send(`
-                <h2>The Bridge4K</h2>
-                <p>Overlay not found.</p>
-            `);
-
-        }
-
-        res.sendFile(
-            path.join(__dirname, "overlay.html")
+            }
         );
 
-    } catch (err) {
 
-        console.error(
-            "❌ Failed to load overlay:",
-            err
+        this.app.get(
+            "/overlay/:login",
+            async (req, res) => {
+
+                try {
+
+                    const login =
+                        req.params.login
+                            .toLowerCase();
+
+                    const account =
+                        await Account.loadByLogin(
+                            login
+                        );
+
+                    if (!account) {
+
+                        return res
+                            .status(404)
+                            .send(`
+                                <h2>The Bridge4K</h2>
+                                <p>Overlay not found.</p>
+                            `);
+
+                    }
+
+                    res.sendFile(
+                        path.join(
+                            __dirname,
+                            "overlay.html"
+                        )
+                    );
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ Failed to load overlay:",
+                        err
+                    );
+
+                    res.status(500).send(
+                        "Failed to load overlay."
+                    );
+
+                }
+
+            }
         );
 
-        res.status(500).send(
-            "Failed to load overlay."
-        );
-
-    }
-
-});
 
         const fs = require("fs");
 
-        this.app.get("/debug-overlay", (req, res) => {
+        this.app.get(
+            "/debug-overlay",
+            (req, res) => {
 
-            res.type("text/plain");
+                res.type(
+                    "text/plain"
+                );
 
-            res.send(
-                fs.readFileSync(
-                    path.join(__dirname, "overlay.html"),
-                    "utf8"
-                )
-            );
+                res.send(
+                    fs.readFileSync(
+                        path.join(
+                            __dirname,
+                            "overlay.html"
+                        ),
+                        "utf8"
+                    )
+                );
 
-        });
+            }
+        );
+
+        // ============================
+// Kick Webhook
+// ============================
+
+this.app.post(
+    "/kick/webhook",
+    express.json(),
+    async (req, res) => {
+
+        console.log(
+            "📨 Kick Webhook:",
+            JSON.stringify(req.body, null, 2)
+        );
+
+        return res.sendStatus(200);
+    }
+);
 
         // ============================
         // Twitch Login
         // ============================
 
-        this.app.get("/auth/twitch", (req, res) => {
+        this.app.get(
+            "/auth/twitch",
+            (req, res) => {
 
-            const result = TwitchAuth.buildLoginURL();
+                const result =
+                    TwitchAuth.buildLoginURL();
 
-            res.redirect(result.url);
+                res.redirect(
+                    result.url
+                );
 
-        });
+            }
+        );
+
 
         // ============================
         // Twitch OAuth Callback
@@ -120,128 +223,281 @@ class Bridge extends EventEmitter {
             "/auth/twitch/callback",
             TwitchCallback
         );
+// ============================
+// Kick Connection Status
+// ============================
+
+this.app.get(
+    "/kick/status",
+    async (req, res) => {
+
+        try {
+
+            const login =
+                req.query.login;
+
+            if (!login) {
+                return res
+                    .status(400)
+                    .json({
+                        connected: false,
+                        error: "Missing login."
+                    });
+            }
+
+            const account =
+                await Account.loadByLogin(
+                    login
+                );
+
+            if (!account) {
+                return res
+                    .status(404)
+                    .json({
+                        connected: false,
+                        error: "Account not found."
+                    });
+            }
+
+            const connection =
+                await require(
+                    "./data/platformConnections"
+                ).load(
+                    account.overlayId,
+                    "kick"
+                );
+
+            return res.json({
+                connected: !!connection,
+                displayName:
+                    connection?.displayName || null,
+                login:
+                    connection?.login || null
+            });
+
+        } catch (err) {
+
+            console.error(
+                "❌ Failed to check Kick status:",
+                err
+            );
+
+            return res
+                .status(500)
+                .json({
+                    connected: false,
+                    error: "Failed to check Kick status."
+                });
+        }
+    }
+);
 
         // ============================
+        // Kick Login
+        // ============================
 
-        const server = http.createServer(this.app);
+        this.app.get(
+            "/kick/login",
+            KickCallback.createLogin
+        );
 
-        this.wss = new WebSocket.Server({ server });
 
-        server.listen(PORT, () => {
-            console.log(
-                `The Bridge4K running on port ${PORT}`
+        // ============================
+        // Kick OAuth Callback
+        // ============================
+
+        this.app.get(
+            "/kick/callback",
+            KickCallback.callback
+        );
+
+
+        // ============================
+        // HTTP + WebSocket Server
+        // ============================
+
+        const server =
+            http.createServer(
+                this.app
             );
-        });
+
+        this.wss =
+            new WebSocket.Server({
+                server
+            });
+
+
+        server.listen(
+            PORT,
+            () => {
+
+                console.log(
+                    `The Bridge4K running on port ${PORT}`
+                );
+
+            }
+        );
+
 
         // ============================
         // WebSocket Connections
         // ============================
 
-        this.wss.on("connection", async (ws, req) => {
-
-            console.log("🖥 Overlay Connected");
-
-            try {
-
-                const url = new URL(
-                    req.url,
-                    `http://${req.headers.host || "localhost"}`
-                );
-
-                let overlayId =
-    url.searchParams.get("overlayId");
-
-if (!overlayId) {
-
-    const match =
-        url.pathname.match(/^\/overlay\/([^/]+)$/);
-
-    if (match) {
-
-        const login =
-            match[1].toLowerCase();
-
-        const account =
-            await Account.loadByLogin(login);
-
-        if (account) {
-            overlayId = account.overlayId;
-        }
-
-    }
-
-}
-
-                // Keep the existing root overlay working.
-                if (!overlayId) {
-                    overlayId = this.defaultOverlayId;
-                }
-
-                ws.overlayId = overlayId;
+        this.wss.on(
+            "connection",
+            async (ws, req) => {
 
                 console.log(
-                    "🎯 Overlay ID:",
-                    overlayId || "none"
+                    "🖥 Overlay Connected"
                 );
 
-                if (overlayId) {
+                try {
 
-                    const broadcasterId =
-                        this.broadcasters.get(overlayId);
+                    const url =
+                        new URL(
+                            req.url,
+                            `http://${req.headers.host || "localhost"}`
+                        );
 
-                    if (broadcasterId) {
+                    let overlayId =
+                        url.searchParams.get(
+                            "overlayId"
+                        );
 
-                        ws.send(JSON.stringify({
-                            type: "init",
-                            userId: broadcasterId,
-                            overlayId
-                        }));
+
+                    if (!overlayId) {
+
+                        const match =
+                            url.pathname.match(
+                                /^\/overlay\/([^/]+)$/
+                            );
+
+                        if (match) {
+
+                            const login =
+                                match[1]
+                                    .toLowerCase();
+
+                            const account =
+                                await Account.loadByLogin(
+                                    login
+                                );
+
+                            if (account) {
+
+                                overlayId =
+                                    account.overlayId;
+
+                            }
+
+                        }
 
                     }
 
+
+                    // Keep the existing root
+                    // overlay working.
+                    if (!overlayId) {
+
+                        overlayId =
+                            this.defaultOverlayId;
+
+                    }
+
+
+                    ws.overlayId =
+                        overlayId;
+
+
+                    console.log(
+                        "🎯 Overlay ID:",
+                        overlayId || "none"
+                    );
+
+
+                    if (overlayId) {
+
+                        const broadcasterId =
+                            this.broadcasters.get(
+                                overlayId
+                            );
+
+                        if (broadcasterId) {
+
+                            ws.send(
+                                JSON.stringify({
+                                    type: "init",
+                                    userId:
+                                        broadcasterId,
+                                    overlayId
+                                })
+                            );
+
+                        }
+
+                    }
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ WebSocket initialization failed:",
+                        err
+                    );
+
                 }
 
-            } catch (err) {
-
-                console.error(
-                    "❌ WebSocket initialization failed:",
-                    err
-                );
-
             }
+        );
 
-        });
 
         // ============================
         // Message Routing
         // ============================
 
-        this.on("message", (data) => {
+        this.on(
+            "message",
+            (data) => {
 
-            const payload = JSON.stringify(data);
+                const payload =
+                    JSON.stringify(
+                        data
+                    );
 
-            this.wss.clients.forEach((client) => {
+                this.wss.clients.forEach(
+                    (client) => {
 
-                if (
-                    client.readyState !== WebSocket.OPEN
-                ) {
-                    return;
-                }
+                        if (
+                            client.readyState !==
+                            WebSocket.OPEN
+                        ) {
+                            return;
+                        }
 
-                // Only send the message to the
-                // overlay belonging to this account.
-                if (
-                    data.overlayId &&
-                    client.overlayId !== data.overlayId
-                ) {
-                    return;
-                }
 
-                client.send(payload);
+                        // Only send the message
+                        // to the overlay belonging
+                        // to this account.
+                        if (
+                            data.overlayId &&
+                            client.overlayId !==
+                                data.overlayId
+                        ) {
 
-            });
+                            return;
 
-        });
+                        }
+
+
+                        client.send(
+                            payload
+                        );
+
+                    }
+                );
+
+            }
+        );
+
 
         // ============================
         // Load Default Account
@@ -251,6 +507,7 @@ if (!overlayId) {
 
     }
 
+
     async loadDefaultAccount() {
 
         try {
@@ -258,7 +515,9 @@ if (!overlayId) {
             const accounts =
                 await Account.loadAll();
 
-            if (accounts.length > 0) {
+            if (
+                accounts.length > 0
+            ) {
 
                 this.defaultOverlayId =
                     accounts[0].overlayId;
@@ -281,55 +540,70 @@ if (!overlayId) {
 
     }
 
+
     send(data) {
 
-        this.emit("message", {
+        this.emit(
+            "message",
+            {
 
-            type: data.type,
+                type:
+                    data.type,
 
-            platform:
-                data.platform,
+                platform:
+                    data.platform,
 
-            overlayId:
-                data.overlayId || null,
+                overlayId:
+                    data.overlayId ||
+                    null,
 
-            username:
-                data.username,
+                username:
+                    data.username,
 
-            color:
-                data.color || "#ffffff",
+                color:
+                    data.color ||
+                    "#ffffff",
 
-            text:
-                data.text,
+                text:
+                    data.text,
 
-            badges:
-                data.badges || {},
+                badges:
+                    data.badges ||
+                    {},
 
-            emotes:
-                data.emotes || {},
+                emotes:
+                    data.emotes ||
+                    {},
 
-            channelId:
-                data.channelId || "",
+                channelId:
+                    data.channelId ||
+                    "",
 
-            userId:
-                data.userId || "",
+                userId:
+                    data.userId ||
+                    "",
 
-            sevenTV:
-                data.sevenTV || {
-                    paint: null,
-                    badge: null,
-                    effects: [],
-                    raw: null
-                },
+                sevenTV:
+                    data.sevenTV || {
+                        paint: null,
+                        badge: null,
+                        effects: [],
+                        raw: null
+                    },
 
-            timestamp:
-                Date.now()
+                timestamp:
+                    Date.now()
 
-        });
+            }
+        );
 
     }
 
-    setBroadcasterId(id, overlayId = null) {
+
+    setBroadcasterId(
+        id,
+        overlayId = null
+    ) {
 
         if (overlayId) {
 
@@ -344,16 +618,21 @@ if (!overlayId) {
 
         } else {
 
-            // Legacy fallback for the current account.
-            this.broadcasterId = id;
+            // Legacy fallback for
+            // the current account.
+            this.broadcasterId =
+                id;
 
         }
 
+
         this.send({
 
-            type: "init",
+            type:
+                "init",
 
-            userId: id,
+            userId:
+                id,
 
             overlayId
 
@@ -362,6 +641,7 @@ if (!overlayId) {
     }
 
 }
+
 
 // ============================
 // Database Connection
@@ -372,7 +652,9 @@ if (!overlayId) {
     try {
 
         const result =
-            await db.query("SELECT NOW()");
+            await db.query(
+                "SELECT NOW()"
+            );
 
         console.log(
             "✅ Connected to Postgres!"
@@ -388,34 +670,53 @@ if (!overlayId) {
             "❌ Postgres connection failed:"
         );
 
-        console.error(err);
+        console.error(
+            err
+        );
 
     }
 
 })();
 
+
 // ============================
 // Bridge
 // ============================
 
-const bridge = new Bridge();
+const bridge =
+    new Bridge();
 
 bridge.loadDefaultAccount();
+
 
 // ============================
 // 7TV
 // ============================
 
 const sevenTV =
-    new SevenTVClient(205072512);
+    new SevenTVClient(
+        205072512
+    );
 
 sevenTV.connect();
 
-module.exports = bridge;
+
+// ============================
+// Export Bridge
+// ============================
+
+module.exports =
+    bridge;
+
 
 // ============================
 // Load Platforms
 // ============================
 
-require("./platforms/twitch");
-require("./platforms/youtube");
+require(
+    "./platforms/twitch"
+);
+
+require(
+    "./platforms/youtube"
+);
