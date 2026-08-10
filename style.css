@@ -181,6 +181,11 @@ body {
     object-fit: contain;
 }
 
+.platform-icon[src*="kick"] {
+    width: calc(var(--chat-font-size) * 1.3) !important;
+    height: calc(var(--chat-font-size) * 1.3) !important;
+}
+
 .badges {
     display: flex;
     align-items: center;

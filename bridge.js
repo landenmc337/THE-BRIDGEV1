@@ -192,6 +192,25 @@ this.app.post(
             JSON.stringify(req.body, null, 2)
         );
 
+        const message = req.body;
+
+        this.send({
+    type: "message",
+    platform: "kick",
+    overlayId: "ovl_deeno4k",
+    username:
+        message.sender?.username ||
+        message.broadcaster?.username ||
+        "Kick User",
+    text:
+        message.content || "",
+    userId:
+        message.sender?.user_id ||
+        "",
+    badges: {},
+    emotes: {},
+    timestamp: Date.now()
+});
         return res.sendStatus(200);
     }
 );

@@ -11,7 +11,7 @@ const IconManager = {
                 return "/assets/icons/youtube.svg";
 
             case "kick":
-                return "/assets/icons/kick.svg";
+    return "/assets/icons/kick.png";
 
             default:
                 return "";
