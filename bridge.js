@@ -137,7 +137,9 @@ function buildKickEmoteHtml(content, emotes = []) {
     if (cursor < content.length) {
 
         result += escapeHtml(
-            content.slice(cursor)
+            content.slice(
+                cursor
+            )
         );
     }
 
@@ -329,7 +331,7 @@ class Bridge extends EventEmitter {
         // ========================================================
 
         this.app.get(
-            "/overlay/:identifier/settings",
+            "/api/overlay/:identifier/settings",
             async (req, res) => {
 
                 try {
@@ -375,9 +377,7 @@ class Bridge extends EventEmitter {
                     const result =
                         await db.query(
                             `
-                            SELECT
-                                hidden_bots,
-                                show_commands
+                            SELECT *
                             FROM overlay_settings
                             WHERE overlay_id = $1
                             LIMIT 1
@@ -387,21 +387,19 @@ class Bridge extends EventEmitter {
                             ]
                         );
 
-                    const row =
-                        result.rows[0];
+                    if (
+                        result.rows.length === 0
+                    ) {
 
-                    return res.json({
+                        return res.json({
+                            overlayId:
+                                account.overlayId
+                        });
+                    }
 
-                        overlayId:
-                            account.overlayId,
-
-                        hiddenBots:
-                            row?.hidden_bots || "",
-
-                        showCommands:
-                            row?.show_commands === true
-
-                    });
+                    return res.json(
+                        result.rows[0]
+                    );
 
                 } catch (err) {
 
@@ -426,7 +424,7 @@ class Bridge extends EventEmitter {
         // ========================================================
 
         this.app.post(
-            "/overlay/:identifier/settings",
+            "/api/overlay/:identifier/settings",
             async (req, res) => {
 
                 try {
@@ -435,16 +433,6 @@ class Bridge extends EventEmitter {
                         String(
                             req.params.identifier || ""
                         ).trim();
-
-                    if (!identifier) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                error:
-                                    "Missing overlay identifier."
-                            });
-                    }
 
                     let account =
                         await Account.loadByOverlayId(
@@ -469,75 +457,101 @@ class Bridge extends EventEmitter {
                             });
                     }
 
-                    const rawHiddenBots =
-                        typeof req.body?.hiddenBots ===
-                        "string"
-                            ? req.body.hiddenBots
-                            : "";
+                    const body =
+                        req.body || {};
 
-                    const hiddenBots =
-                        rawHiddenBots
-                            .split(",")
-                            .map(
-                                bot =>
-                                    bot
-                                        .trim()
-                                        .toLowerCase()
-                            )
-                            .filter(Boolean)
-                            .filter(
-                                (
-                                    bot,
-                                    index,
-                                    list
-                                ) =>
-                                    list.indexOf(bot) ===
-                                    index
-                            )
-                            .join(",");
+                    const allowedFields = [
+                        "show_messages",
+                        "show_commands",
+                        "show_badges",
+                        "show_emotes",
+                        "show_7tv",
+                        "show_twitch",
+                        "show_kick",
+                        "show_youtube",
+                        "hidden_bots",
+                        "theme"
+                    ];
 
-                    const showCommands =
-                        req.body?.showCommands === true;
+                    const fields = [];
+                    const values = [];
+
+                    for (
+                        const field of allowedFields
+                    ) {
+
+                        if (
+                            Object.prototype.hasOwnProperty.call(
+                                body,
+                                field
+                            )
+                        ) {
+
+                            fields.push(field);
+                            values.push(
+                                body[field]
+                            );
+                        }
+                    }
+
+                    if (!fields.length) {
+
+                        return res.json({
+                            success: true
+                        });
+                    }
+
+                    const columns =
+                        ["overlay_id"];
+
+                    const placeholders =
+                        ["$1"];
+
+                    const params = [
+                        account.overlayId
+                    ];
+
+                    fields.forEach(
+                        (
+                            field,
+                            index
+                        ) => {
+
+                            columns.push(
+                                field
+                            );
+
+                            placeholders.push(
+                                `$${index + 2}`
+                            );
+
+                            params.push(
+                                values[index]
+                            );
+                        }
+                    );
+
+                    const updates =
+                        fields.map(
+                            field =>
+                                `${field} = EXCLUDED.${field}`
+                        );
 
                     await db.query(
                         `
-                        INSERT INTO overlay_settings (
-                            overlay_id,
-                            hidden_bots,
-                            show_commands
-                        )
-                        VALUES (
-                            $1,
-                            $2,
-                            $3
-                        )
-                        ON CONFLICT (
-                            overlay_id
-                        )
+                        INSERT INTO overlay_settings
+                        (${columns.join(", ")})
+                        VALUES
+                        (${placeholders.join(", ")})
+                        ON CONFLICT (overlay_id)
                         DO UPDATE SET
-                            hidden_bots =
-                                EXCLUDED.hidden_bots,
-                            show_commands =
-                                EXCLUDED.show_commands
+                        ${updates.join(", ")}
                         `,
-                        [
-                            account.overlayId,
-                            hiddenBots,
-                            showCommands
-                        ]
+                        params
                     );
 
                     return res.json({
-
-                        success: true,
-
-                        overlayId:
-                            account.overlayId,
-
-                        hiddenBots,
-
-                        showCommands
-
+                        success: true
                     });
 
                 } catch (err) {
@@ -559,228 +573,225 @@ class Bridge extends EventEmitter {
 
 
         // ========================================================
-        // Kick Webhook
+        // Twitch Auth
         // ========================================================
 
-        this.app.post(
-            "/kick/webhook",
+        this.app.get(
+            "/auth/twitch",
             async (req, res) => {
-
-                console.log(
-                    "📨 Kick Webhook:",
-                    JSON.stringify(
-                        req.body,
-                        null,
-                        2
-                    )
-                );
 
                 try {
 
-                    const message =
-                        req.body || {};
+                    const overlayId =
+                        String(
+                            req.query.overlayId || ""
+                        ).trim();
 
-                    const broadcasterId =
-                        message.broadcaster?.user_id ??
-                        message.broadcaster?.id ??
-                        message.broadcaster_id ??
-                        message.channel?.user_id ??
-                        message.channel?.id ??
-                        null;
+                    const login =
+                        String(
+                            req.query.login || ""
+                        ).trim();
 
-                    const broadcasterLogin =
-                        message.broadcaster?.username ||
-                        message.broadcaster?.login ||
-                        message.channel?.username ||
-                        message.channel?.login ||
-                        null;
+                    if (!overlayId && !login) {
 
-                    let connection = null;
-
-                    if (
-                        broadcasterId !== null
-                    ) {
-
-                        connection =
-                            await PlatformConnections
-                                .loadByPlatformUserId(
-                                    "kick",
-                                    String(
-                                        broadcasterId
-                                    )
-                                );
+                        return res
+                            .status(400)
+                            .send(
+                                "Missing overlayId or login."
+                            );
                     }
 
-                    if (
-                        !connection &&
-                        broadcasterLogin
-                    ) {
+                    let account =
+                        overlayId
+                            ? await Account.loadByOverlayId(
+                                overlayId
+                            )
+                            : null;
 
-                        connection =
-                            await PlatformConnections
-                                .loadByPlatformLogin(
-                                    "kick",
-                                    broadcasterLogin
-                                );
+                    if (!account && login) {
+
+                        account =
+                            await Account.loadByLogin(
+                                login.toLowerCase()
+                            );
                     }
 
-                    if (!connection) {
+                    if (!account) {
 
-                        console.warn(
-                            "⚠️ Kick webhook could not resolve an account:",
-                            {
-                                broadcasterId,
-                                broadcasterLogin
-                            }
-                        );
-
-                        return res.sendStatus(200);
+                        return res
+                            .status(404)
+                            .send(
+                                "Account not found."
+                            );
                     }
 
-                    this.send({
-
-                        type: "message",
-
-                        platform: "kick",
-
-                        overlayId:
-                            connection.overlayId,
-
-                        username:
-                            message.sender?.username ||
-                            message.sender?.name ||
-                            "Kick User",
-
-                        text:
-                            buildKickEmoteHtml(
-                                message.content || "",
-                                message.emotes || []
-                            ).text,
-
-                        userId:
-                            message.sender?.user_id ||
-                            message.sender?.id ||
-                            "",
-
-                        badges: {},
-
-                        emotes: {},
-
-                        timestamp:
-                            Date.now()
-                    });
-
-                    return res.sendStatus(200);
+                    return res.redirect(
+                        TwitchAuth.getAuthUrl(
+                            account.overlayId
+                        )
+                    );
 
                 } catch (err) {
 
                     console.error(
-                        "❌ Kick webhook routing failed:",
+                        "❌ Twitch auth failed:",
                         err
                     );
 
-                    return res.sendStatus(500);
+                    return res
+                        .status(500)
+                        .send(
+                            "Twitch authentication failed."
+                        );
                 }
             }
         );
 
 
         // ========================================================
-        // Twitch Login
+        // Twitch Callback
         // ========================================================
 
         this.app.get(
-            "/auth/twitch",
-            (req, res) => {
+            "/auth/twitch/callback",
+            async (req, res) => {
 
-                const result =
-                    TwitchAuth.buildLoginURL();
+                try {
 
-                res.redirect(
-                    result.url
-                );
+                    await TwitchCallback.handle(
+                        req,
+                        res
+                    );
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ Twitch callback failed:",
+                        err
+                    );
+
+                    if (!res.headersSent) {
+
+                        res
+                            .status(500)
+                            .send(
+                                "Twitch callback failed."
+                            );
+                    }
+                }
             }
         );
 
 
         // ========================================================
-        // YouTube OAuth Callback
+        // Kick Callback
         // ========================================================
 
         this.app.get(
-            "/youtube/callback",
-            YouTubeCallback.callback
-        );
-
-
-        // ========================================================
-        // YouTube Login
-        // ========================================================
-
-        this.app.get(
-            "/youtube/login",
-            YouTubeCallback.createLogin
-        );
-
-
-        // ========================================================
-        // Twitch OAuth Callback
-        // ========================================================
-
-        this.app.get(
-            "/auth/twitch/callback",
-            TwitchCallback
-        );
-
-
-        // ========================================================
-        // Account / Overlay Status
-        // ========================================================
-
-        this.app.get(
-            "/account/status",
+            "/auth/kick/callback",
             async (req, res) => {
 
                 try {
 
-                    const login =
-                        String(
-                            req.query.login || ""
-                        )
-                            .trim()
-                            .toLowerCase();
+                    await KickCallback.handle(
+                        req,
+                        res
+                    );
 
-                    if (!login) {
+                } catch (err) {
 
-                        return res
-                            .status(400)
-                            .json({
-                                found: false,
-                                error:
-                                    "Missing login."
-                            });
+                    console.error(
+                        "❌ Kick callback failed:",
+                        err
+                    );
+
+                    if (!res.headersSent) {
+
+                        res
+                            .status(500)
+                            .send(
+                                "Kick callback failed."
+                            );
                     }
+                }
+            }
+        );
 
-                    const account =
-                        await Account.loadByLogin(
-                            login
+
+        // ========================================================
+        // YouTube Callback
+        // ========================================================
+
+        this.app.get(
+            "/auth/youtube/callback",
+            async (req, res) => {
+
+                try {
+
+                    await YouTubeCallback.handle(
+                        req,
+                        res
+                    );
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ YouTube callback failed:",
+                        err
+                    );
+
+                    if (!res.headersSent) {
+
+                        res
+                            .status(500)
+                            .send(
+                                "YouTube callback failed."
+                            );
+                    }
+                }
+            }
+        );
+
+
+        // ========================================================
+        // Account Info
+        // ========================================================
+
+        this.app.get(
+            "/api/account/:identifier",
+            async (req, res) => {
+
+                try {
+
+                    const identifier =
+                        String(
+                            req.params.identifier || ""
+                        ).trim();
+
+                    let account =
+                        await Account.loadByOverlayId(
+                            identifier
                         );
+
+                    if (!account) {
+
+                        account =
+                            await Account.loadByLogin(
+                                identifier.toLowerCase()
+                            );
+                    }
 
                     if (!account) {
 
                         return res
                             .status(404)
                             .json({
-                                found: false,
                                 error:
                                     "Account not found."
                             });
                     }
 
                     return res.json({
-
-                        found: true,
-
                         overlayId:
                             account.overlayId,
 
@@ -788,23 +799,24 @@ class Bridge extends EventEmitter {
                             account.login,
 
                         displayName:
-                            account.displayName ||
-                            null
+                            account.displayName,
+
+                        userId:
+                            account.userId
                     });
 
                 } catch (err) {
 
                     console.error(
-                        "❌ Failed to load account status:",
+                        "❌ Failed to load account:",
                         err
                     );
 
                     return res
                         .status(500)
                         .json({
-                            found: false,
                             error:
-                                "Failed to load account status."
+                                "Failed to load account."
                         });
                 }
             }
@@ -812,251 +824,26 @@ class Bridge extends EventEmitter {
 
 
         // ========================================================
-        // Platform Connection Status
+        // WebSocket Server
         // ========================================================
 
-        this.app.get(
-            "/platform/status",
-            async (req, res) => {
-
-                try {
-
-                    const login =
-                        String(
-                            req.query.login || ""
-                        )
-                            .trim()
-                            .toLowerCase();
-
-                    const platform =
-                        String(
-                            req.query.platform || ""
-                        )
-                            .trim()
-                            .toLowerCase();
-
-                    if (!login) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                connected: false,
-                                error:
-                                    "Missing login."
-                            });
-                    }
-
-                    if (
-                        ![
-                            "twitch",
-                            "kick",
-                            "youtube"
-                        ].includes(platform)
-                    ) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                connected: false,
-                                error:
-                                    "Invalid platform."
-                            });
-                    }
-
-                    let connection = null;
-
-                    const account =
-                        await Account.loadByLogin(
-                            login
-                        );
-
-                    if (
-                        account &&
-                        account.overlayId
-                    ) {
-
-                        connection =
-                            await PlatformConnections.load(
-                                account.overlayId,
-                                platform
-                            );
-                    }
-
-                    if (!connection) {
-
-                        connection =
-                            await PlatformConnections
-                                .loadByPlatformLogin(
-                                    platform,
-                                    login
-                                );
-                    }
-
-                    if (!connection) {
-
-                        return res.json({
-
-                            connected: false,
-
-                            platform,
-
-                            displayName: null,
-
-                            login: null
-
-                        });
-                    }
-
-                    return res.json({
-
-                        connected: true,
-
-                        platform,
-
-                        displayName:
-                            connection.displayName ||
-                            null,
-
-                        login:
-                            connection.login ||
-                            null
-
-                    });
-
-                } catch (err) {
-
-                    console.error(
-                        "❌ Failed to check platform status:",
-                        err
-                    );
-
-                    return res
-                        .status(500)
-                        .json({
-                            connected: false,
-                            error:
-                                "Failed to check platform status."
-                        });
-                }
-            }
-        );
-
-
-        // ========================================================
-        // Kick Connection Status
-        // ========================================================
-
-        this.app.get(
-            "/kick/status",
-            async (req, res) => {
-
-                try {
-
-                    const login =
-                        req.query.login;
-
-                    if (!login) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                connected: false,
-                                error:
-                                    "Missing login."
-                            });
-                    }
-
-                    const account =
-                        await Account.loadByLogin(
-                            login
-                        );
-
-                    if (!account) {
-
-                        return res
-                            .status(404)
-                            .json({
-                                connected: false,
-                                error:
-                                    "Account not found."
-                            });
-                    }
-
-                    const connection =
-                        await PlatformConnections.load(
-                            account.overlayId,
-                            "kick"
-                        );
-
-                    return res.json({
-
-                        connected:
-                            !!connection,
-
-                        displayName:
-                            connection?.displayName ||
-                            null,
-
-                        login:
-                            connection?.login ||
-                            null
-
-                    });
-
-                } catch (err) {
-
-                    console.error(
-                        "❌ Failed to check Kick status:",
-                        err
-                    );
-
-                    return res
-                        .status(500)
-                        .json({
-                            connected: false,
-                            error:
-                                "Failed to check Kick status."
-                        });
-                }
-            }
-        );
-
-
-        // ========================================================
-        // Kick Login
-        // ========================================================
-
-        this.app.get(
-            "/kick/login",
-            KickCallback.createLogin
-        );
-
-
-        // ========================================================
-        // Kick OAuth Callback
-        // ========================================================
-
-        this.app.get(
-            "/kick/callback",
-            KickCallback.callback
-        );
-
-
-        // ========================================================
-        // HTTP + WebSocket Server
-        // ========================================================
-
-        const server =
+        this.server =
             http.createServer(
                 this.app
             );
 
         this.wss =
             new WebSocket.Server({
-                server
+                server:
+                    this.server
             });
 
-        server.listen(
+
+        // ========================================================
+        // Start Server
+        // ========================================================
+
+        this.server.listen(
             PORT,
             () => {
 
@@ -1118,10 +905,25 @@ class Bridge extends EventEmitter {
                         }
                     }
 
+                    // ====================================================
+                    // IMPORTANT:
+                    // Never fall back to the default overlay.
+                    // Every WebSocket connection must belong to a
+                    // specific overlay.
+                    // ====================================================
+
                     if (!overlayId) {
 
-                        overlayId =
-                            this.defaultOverlayId;
+                        console.warn(
+                            "⚠️ WebSocket connection rejected: missing overlayId"
+                        );
+
+                        ws.close(
+                            1008,
+                            "Missing overlayId"
+                        );
+
+                        return;
                     }
 
                     ws.overlayId =
@@ -1129,33 +931,27 @@ class Bridge extends EventEmitter {
 
                     console.log(
                         "🎯 Overlay ID:",
-                        overlayId ||
-                            "none"
+                        overlayId
                     );
 
-                    if (overlayId) {
+                    const broadcasterId =
+                        this.broadcasters.get(
+                            overlayId
+                        );
 
-                        const broadcasterId =
-                            this.broadcasters.get(
+                    if (broadcasterId) {
+
+                        ws.send(
+                            JSON.stringify({
+                                type:
+                                    "init",
+
+                                userId:
+                                    broadcasterId,
+
                                 overlayId
-                            );
-
-                        if (broadcasterId) {
-
-                            ws.send(
-                                JSON.stringify({
-
-                                    type:
-                                        "init",
-
-                                    userId:
-                                        broadcasterId,
-
-                                    overlayId
-
-                                })
-                            );
-                        }
+                            })
+                        );
                     }
 
                 } catch (err) {
@@ -1164,6 +960,15 @@ class Bridge extends EventEmitter {
                         "❌ WebSocket initialization failed:",
                         err
                     );
+
+                    try {
+
+                        ws.close(
+                            1011,
+                            "WebSocket initialization failed"
+                        );
+
+                    } catch (_) {}
                 }
             }
         );
@@ -1182,6 +987,24 @@ class Bridge extends EventEmitter {
                         data
                     );
 
+                // ====================================================
+                // CRITICAL ROUTING PROTECTION
+                //
+                // A message without overlayId must NEVER be broadcast.
+                // Previously, missing overlayId caused the message to
+                // reach every connected overlay.
+                // ====================================================
+
+                if (!data.overlayId) {
+
+                    console.warn(
+                        "⚠️ Dropping message with no overlayId:",
+                        data.type || "unknown"
+                    );
+
+                    return;
+                }
+
                 this.wss.clients.forEach(
                     (client) => {
 
@@ -1193,9 +1016,8 @@ class Bridge extends EventEmitter {
                         }
 
                         if (
-                            data.overlayId &&
                             client.overlayId !==
-                                data.overlayId
+                            data.overlayId
                         ) {
                             return;
                         }
@@ -1368,6 +1190,7 @@ class Bridge extends EventEmitter {
                     "🎯 Default overlay:",
                     this.defaultOverlayId
                 );
+
             }
 
         } catch (err) {
@@ -1470,78 +1293,18 @@ class Bridge extends EventEmitter {
         this.send({
 
             type:
-                "init",
+                "broadcaster",
+
+            platform:
+                "system",
+
+            overlayId,
 
             userId:
-                id,
-
-            overlayId
+                id
         });
     }
 }
 
 
-// ============================================================
-// Database Connection
-// ============================================================
-
-(async () => {
-
-    try {
-
-        const result =
-            await db.query(
-                "SELECT NOW()"
-            );
-
-        console.log(
-            "✅ Connected to Postgres!"
-        );
-
-        console.log(
-            result.rows[0]
-        );
-
-    } catch (err) {
-
-        console.error(
-            "❌ Postgres connection failed:"
-        );
-
-        console.error(
-            err
-        );
-    }
-
-})();
-
-
-// ============================================================
-// Bridge
-// ============================================================
-
-const bridge =
-    new Bridge();
-
-bridge.loadDefaultAccount();
-
-
-// ============================================================
-// Export Bridge
-// ============================================================
-
-module.exports =
-    bridge;
-
-
-// ============================================================
-// Load Platforms
-// ============================================================
-
-require(
-    "./platforms/twitch"
-);
-
-require(
-    "./platforms/youtube"
-);
+module.exports = Bridge;
