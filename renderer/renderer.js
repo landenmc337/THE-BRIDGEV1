@@ -179,12 +179,10 @@ function createText(data) {
     let html =
         data.text || "";
 
-
     if (
         typeof EmoteManager !==
         "undefined"
     ) {
-
         html =
             EmoteManager.process(
                 html,
@@ -192,16 +190,35 @@ function createText(data) {
             );
     }
 
-
     if (
         typeof SevenTVManager !==
         "undefined"
     ) {
-
         html =
             SevenTVManager.process(
                 html
             );
+    }
+
+    // ========================================
+    // Deeno4k Custom Message Color
+    // ========================================
+
+    const isDeeno =
+        String(
+            data.username || ""
+        ).toLowerCase() === "deeno4k";
+
+    if (isDeeno) {
+
+        html = `
+            <span
+                class="deeno-message"
+                style="color:#8B0000;"
+            >
+                ${html}
+            </span>
+        `;
     }
 
     return `
