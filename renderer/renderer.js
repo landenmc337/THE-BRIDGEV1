@@ -200,6 +200,7 @@ function createText(data) {
             );
     }
 
+
     // ========================================
     // Deeno4k Custom Message Color
     // ========================================
@@ -340,6 +341,47 @@ function addMessage(data) {
                     }
                 }
             );
+
+        return;
+    }
+
+
+    // ========================================
+    // Hidden Bot Filter
+    // ========================================
+    //
+    // Empty list = show ALL bots.
+    //
+    // Example:
+    // hiddenBots=nightbot,moobot
+    //
+    // Only those usernames are hidden.
+    // ========================================
+
+    const messageUsername =
+        String(
+            data.username || ""
+        ).trim().toLowerCase();
+
+    const hiddenBots =
+        Array.isArray(
+            RelaySettings.hiddenBots
+        )
+            ? RelaySettings.hiddenBots
+            : [];
+
+    if (
+        data.platform === "twitch" &&
+        messageUsername &&
+        hiddenBots.includes(
+            messageUsername
+        )
+    ) {
+
+        console.log(
+            "🤖 Hidden bot:",
+            messageUsername
+        );
 
         return;
     }

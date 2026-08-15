@@ -574,19 +574,21 @@ function registerEvents(
             // ========================================
 
             if (
-                config.filters.hiddenUsers.includes(
-                    username
-                )
-            ) {
+    await bridge.shouldHideUser(
+        account.overlayId,
+        username
+    )
+) {
 
-                console.log(
-                    "🚫 Hidden User:",
-                    username
-                );
+    console.log(
+        "🚫 Hidden Bot:",
+        username,
+        "for overlay:",
+        account.overlayId
+    );
 
-                return;
-            }
-
+    return;
+}
 
             const sevenTV =
                 await SevenTVCosmetics.get(

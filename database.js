@@ -1,13 +1,25 @@
 require("dotenv").config();
 
-const { Pool } = require("pg");
+const { Pool } =
+    require("pg");
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL?.includes("railway.app")
-        ? { rejectUnauthorized: false }
-        : false
-});
+const pool =
+    new Pool({
+
+        connectionString:
+            process.env.DATABASE_URL,
+
+        ssl:
+            process.env.DATABASE_URL?.includes(
+                "railway.app"
+            )
+                ? {
+                    rejectUnauthorized:
+                        false
+                }
+                : false
+
+    });
 
 
 // ============================================================
@@ -24,16 +36,26 @@ const pool = new Pool({
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS accounts (
+
                 id SERIAL PRIMARY KEY,
+
                 overlay_id TEXT NOT NULL,
+
                 display_name TEXT NOT NULL,
+
                 login TEXT NOT NULL UNIQUE,
+
                 user_id TEXT NOT NULL UNIQUE,
+
                 access_token TEXT NOT NULL,
+
                 refresh_token TEXT NOT NULL,
+
                 connected_at BIGINT NOT NULL
+
             );
         `);
+
 
         console.log(
             "✅ Accounts table ready."
@@ -50,6 +72,7 @@ const pool = new Pool({
             ON accounts (overlay_id);
         `);
 
+
         console.log(
             "✅ Accounts overlay IDs are unique."
         );
@@ -61,6 +84,7 @@ const pool = new Pool({
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS platform_connections (
+
                 id SERIAL PRIMARY KEY,
 
                 overlay_id TEXT NOT NULL,
@@ -79,16 +103,60 @@ const pool = new Pool({
 
                 connected_at BIGINT NOT NULL,
 
-                UNIQUE (overlay_id, platform),
+                UNIQUE (
+                    overlay_id,
+                    platform
+                ),
 
-                FOREIGN KEY (overlay_id)
-                    REFERENCES accounts(overlay_id)
-                    ON DELETE CASCADE
+                FOREIGN KEY (
+                    overlay_id
+                )
+                REFERENCES accounts(
+                    overlay_id
+                )
+                ON DELETE CASCADE
+
             );
         `);
 
+
         console.log(
             "✅ Platform connections table ready."
+        );
+
+
+        // --------------------------------------------------------
+        // Overlay Settings
+        // --------------------------------------------------------
+        //
+        // One settings row per Bridge4K overlay.
+        //
+        // Empty hidden_bots means:
+        // SHOW ALL BOTS
+        //
+        // --------------------------------------------------------
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS overlay_settings (
+
+                overlay_id TEXT PRIMARY KEY,
+
+                hidden_bots TEXT NOT NULL DEFAULT '',
+
+                FOREIGN KEY (
+                    overlay_id
+                )
+                REFERENCES accounts(
+                    overlay_id
+                )
+                ON DELETE CASCADE
+
+            );
+        `);
+
+
+        console.log(
+            "✅ Overlay settings table ready."
         );
 
 
@@ -98,7 +166,9 @@ const pool = new Pool({
             "❌ Failed to initialize database:"
         );
 
-        console.error(err);
+        console.error(
+            err
+        );
 
     }
 

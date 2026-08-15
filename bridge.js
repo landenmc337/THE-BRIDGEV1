@@ -255,7 +255,221 @@ class Bridge extends EventEmitter {
 
             }
         );
+// ============================
+// Overlay Settings
+// ============================
 
+this.app.get(
+    "/overlay/:identifier/settings",
+    async (req, res) => {
+
+        try {
+
+            const identifier =
+                String(
+                    req.params.identifier || ""
+                ).trim();
+
+            if (!identifier) {
+
+                return res
+                    .status(400)
+                    .json({
+                        error:
+                            "Missing overlay identifier."
+                    });
+
+            }
+
+            let account =
+                await Account.loadByOverlayId(
+                    identifier
+                );
+
+            if (!account) {
+
+                account =
+                    await Account.loadByLogin(
+                        identifier.toLowerCase()
+                    );
+
+            }
+
+            if (!account) {
+
+                return res
+                    .status(404)
+                    .json({
+                        error:
+                            "Overlay not found."
+                    });
+
+            }
+
+            const result =
+                await db.query(
+                    `
+                    SELECT hidden_bots
+                    FROM overlay_settings
+                    WHERE overlay_id = $1
+                    LIMIT 1
+                    `,
+                    [
+                        account.overlayId
+                    ]
+                );
+
+            const hiddenBots =
+                result.rows.length
+                    ? result.rows[0].hidden_bots || ""
+                    : "";
+
+            return res.json({
+                overlayId:
+                    account.overlayId,
+
+                hiddenBots
+            });
+
+        } catch (err) {
+
+            console.error(
+                "❌ Failed to load overlay settings:",
+                err
+            );
+
+            return res
+                .status(500)
+                .json({
+                    error:
+                        "Failed to load overlay settings."
+                });
+
+        }
+
+    }
+);
+
+
+this.app.post(
+    "/overlay/:identifier/settings",
+    express.json(),
+    async (req, res) => {
+
+        try {
+
+            const identifier =
+                String(
+                    req.params.identifier || ""
+                ).trim();
+
+            if (!identifier) {
+
+                return res
+                    .status(400)
+                    .json({
+                        error:
+                            "Missing overlay identifier."
+                    });
+
+            }
+
+            let account =
+                await Account.loadByOverlayId(
+                    identifier
+                );
+
+            if (!account) {
+
+                account =
+                    await Account.loadByLogin(
+                        identifier.toLowerCase()
+                    );
+
+            }
+
+            if (!account) {
+
+                return res
+                    .status(404)
+                    .json({
+                        error:
+                            "Overlay not found."
+                    });
+
+            }
+
+            const rawHiddenBots =
+                typeof req.body?.hiddenBots ===
+                "string"
+                    ? req.body.hiddenBots
+                    : "";
+
+            const hiddenBots =
+                rawHiddenBots
+                    .split(",")
+                    .map(
+                        bot =>
+                            bot
+                                .trim()
+                                .toLowerCase()
+                    )
+                    .filter(Boolean)
+                    .filter(
+                        (bot, index, list) =>
+                            list.indexOf(bot) ===
+                            index
+                    )
+                    .join(",");
+
+
+            await db.query(
+                `
+                INSERT INTO overlay_settings (
+                    overlay_id,
+                    hidden_bots
+                )
+                VALUES ($1, $2)
+                ON CONFLICT (overlay_id)
+                DO UPDATE SET
+                    hidden_bots = EXCLUDED.hidden_bots
+                `,
+                [
+                    account.overlayId,
+                    hiddenBots
+                ]
+            );
+
+
+            return res.json({
+
+                success: true,
+
+                overlayId:
+                    account.overlayId,
+
+                hiddenBots
+
+            });
+
+        } catch (err) {
+
+            console.error(
+                "❌ Failed to save overlay settings:",
+                err
+            );
+
+            return res
+                .status(500)
+                .json({
+                    error:
+                        "Failed to save overlay settings."
+                });
+
+        }
+
+    }
+);
         // ============================
         // Overlay
         // ============================
@@ -1157,7 +1371,73 @@ class Bridge extends EventEmitter {
         }
 
     }
+    
+async shouldHideUser(
+    overlayId,
+    username
+) {
 
+    if (
+        !overlayId ||
+        !username
+    ) {
+        return false;
+    }
+
+    try {
+
+        const result =
+            await db.query(
+                `
+                SELECT hidden_bots
+                FROM overlay_settings
+                WHERE overlay_id = $1
+                LIMIT 1
+                `,
+                [
+                    overlayId
+                ]
+            );
+
+        if (
+            result.rows.length === 0
+        ) {
+            return false;
+        }
+
+        const hiddenBots =
+            String(
+                result.rows[0].hidden_bots ||
+                ""
+            )
+                .split(",")
+                .map(
+                    bot =>
+                        bot.trim().toLowerCase()
+                )
+                .filter(Boolean);
+
+        return hiddenBots.includes(
+            String(
+                username
+            ).trim().toLowerCase()
+        );
+
+    } catch (err) {
+
+        console.error(
+            "❌ Failed to check hidden bot:",
+            err
+        );
+
+        // Fail open.
+        // If settings cannot be read,
+        // do not hide the message.
+        return false;
+
+    }
+
+}
     send(data) {
 
         this.emit(

@@ -20,9 +20,28 @@ const RelaySettings = (() => {
         overlayLogin ||
         null;
 
+
+    // ============================================
+    // Helper
+    // ============================================
+
+    const parseList = (value) => {
+
+        return (
+            value || ""
+        )
+            .split(",")
+            .map(item =>
+                item.trim().toLowerCase()
+            )
+            .filter(Boolean);
+    };
+
+
     return {
 
         channel,
+
 
         // ===============================
         // Appearance
@@ -33,7 +52,9 @@ const RelaySettings = (() => {
             || "Segoe UI (Chatterino)",
 
         fontSize:
-            Number(params.get("fontSize"))
+            Number(
+                params.get("fontSize")
+            )
             || 32,
 
         bubbleColor:
@@ -47,16 +68,21 @@ const RelaySettings = (() => {
             params.get("showPlatformIcons") !== "false",
 
         fadeTime:
-            Number(params.get("fade"))
+            Number(
+                params.get("fade")
+            )
             || 45,
 
-        // Badge size follows font size
         badgeSize:
-            Number(params.get("fontSize"))
+            Number(
+                params.get("fontSize")
+            )
             || 32,
 
         emoteSize:
-            Number(params.get("emoteSize"))
+            Number(
+                params.get("emoteSize")
+            )
             || 72,
 
         align:
@@ -69,15 +95,21 @@ const RelaySettings = (() => {
                 : "classic",
 
         theme:
-            (params.get("theme") || "default")
-                .toLowerCase(),
+            (
+                params.get("theme")
+                || "default"
+            ).toLowerCase(),
 
         x:
-            Number(params.get("x"))
+            Number(
+                params.get("x")
+            )
             || 20,
 
         y:
-            Number(params.get("y"))
+            Number(
+                params.get("y")
+            )
             || 20,
 
         textColor:
@@ -89,8 +121,11 @@ const RelaySettings = (() => {
             || "rgba(0,0,0,.9)",
 
         shadowBlur:
-            Number(params.get("shadowBlur"))
+            Number(
+                params.get("shadowBlur")
+            )
             || 8,
+
 
         // ===============================
         // Chat Filters
@@ -98,6 +133,11 @@ const RelaySettings = (() => {
 
         hideBots:
             params.get("hideBots") === "true",
+
+        hiddenBots:
+            parseList(
+                params.get("hiddenBots")
+            ),
 
         hideCommands:
             params.get("hideCommands") === "true",
@@ -107,14 +147,9 @@ const RelaySettings = (() => {
             || "!",
 
         hiddenUsers:
-            (
-                params.get("hiddenUsers") || ""
+            parseList(
+                params.get("hiddenUsers")
             )
-                .split(",")
-                .map(user =>
-                    user.trim().toLowerCase()
-                )
-                .filter(Boolean)
 
     };
 
