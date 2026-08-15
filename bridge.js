@@ -7,7 +7,6 @@ const http = require("http");
 const TwitchAuth = require("./auth/twitch");
 const TwitchCallback = require("./auth/callback");
 const KickCallback = require("./auth/kickCallback");
-const YouTubeAuth = require("./auth/youtube");
 const YouTubeCallback = require("./auth/youtubeCallback");
 const Account = require("./data/account");
 const PlatformConnections = require("./data/platformConnections");
@@ -19,43 +18,32 @@ const db = require("./database");
 // ============================================================
 
 function escapeHtml(value) {
-
     return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-
 }
 
-
-function buildKickEmoteHtml(
-    content,
-    emotes = []
-) {
+function buildKickEmoteHtml(content, emotes = []) {
 
     if (
         !content ||
         !Array.isArray(emotes) ||
         emotes.length === 0
     ) {
-
         return {
             text: content || "",
             emotes: {}
         };
-
     }
-
 
     const replacements = [];
 
-
     for (const emote of emotes) {
 
-        const emoteId =
-            emote?.emote_id;
+        const emoteId = emote?.emote_id;
 
         if (!emoteId) continue;
 
@@ -63,17 +51,10 @@ function buildKickEmoteHtml(
             continue;
         }
 
+        for (const position of emote.positions) {
 
-        for (
-            const position of emote.positions
-        ) {
-
-            const start =
-                Number(position?.s);
-
-            const end =
-                Number(position?.e);
-
+            const start = Number(position?.s);
+            const end = Number(position?.e);
 
             if (
                 !Number.isInteger(start) ||
@@ -85,40 +66,23 @@ function buildKickEmoteHtml(
                 continue;
             }
 
-
             replacements.push({
-
                 start,
-
-                end:
-                    Math.min(
-                        end,
-                        content.length - 1
-                    ),
-
-                emoteId:
-                    String(emoteId)
-
+                end: Math.min(
+                    end,
+                    content.length - 1
+                ),
+                emoteId: String(emoteId)
             });
-
         }
-
     }
-
 
     if (!replacements.length) {
-
         return {
-
-            text:
-                escapeHtml(content),
-
+            text: escapeHtml(content),
             emotes: {}
-
         };
-
     }
-
 
     replacements.sort(
         (a, b) =>
@@ -126,64 +90,38 @@ function buildKickEmoteHtml(
             b.end - a.end
     );
 
-
     const valid = [];
-
     let lastEnd = -1;
 
+    for (const replacement of replacements) {
 
-    for (
-        const replacement of replacements
-    ) {
-
-        if (
-            replacement.start <=
-            lastEnd
-        ) {
+        if (replacement.start <= lastEnd) {
             continue;
         }
 
-
-        valid.push(
-            replacement
-        );
-
-        lastEnd =
-            replacement.end;
-
+        valid.push(replacement);
+        lastEnd = replacement.end;
     }
 
-
     let result = "";
-
     let cursor = 0;
 
+    for (const replacement of valid) {
 
-    for (
-        const replacement of valid
-    ) {
+        if (replacement.start > cursor) {
 
-        if (
-            replacement.start >
-            cursor
-        ) {
-
-            result +=
-                escapeHtml(
-                    content.slice(
-                        cursor,
-                        replacement.start
-                    )
-                );
-
+            result += escapeHtml(
+                content.slice(
+                    cursor,
+                    replacement.start
+                )
+            );
         }
-
 
         const emoteUrl =
             `https://files.kick.com/emotes/${encodeURIComponent(
                 replacement.emoteId
             )}/fullsize`;
-
 
         result +=
             `<img class="emote kick-emote" ` +
@@ -193,34 +131,20 @@ function buildKickEmoteHtml(
             `decoding="async" ` +
             `draggable="false">`;
 
-
-        cursor =
-            replacement.end + 1;
-
+        cursor = replacement.end + 1;
     }
 
+    if (cursor < content.length) {
 
-    if (
-        cursor <
-        content.length
-    ) {
-
-        result +=
-            escapeHtml(
-                content.slice(cursor)
-            );
-
+        result += escapeHtml(
+            content.slice(cursor)
+        );
     }
-
 
     return {
-
         text: result,
-
         emotes: {}
-
     };
-
 }
 
 
@@ -234,24 +158,18 @@ class Bridge extends EventEmitter {
 
         super();
 
-
-        this.broadcasterId =
-            null;
-
-        this.broadcasters =
-            new Map();
-
-        this.defaultOverlayId =
-            null;
-
+        this.broadcasterId = null;
+        this.broadcasters = new Map();
+        this.defaultOverlayId = null;
 
         const PORT =
             process.env.PORT || 3000;
 
+        this.app = express();
 
-        this.app =
-            express();
-
+        // ========================================================
+        // CORS
+        // ========================================================
 
         this.app.use(
             (req, res, next) => {
@@ -271,40 +189,24 @@ class Bridge extends EventEmitter {
                     "Content-Type"
                 );
 
-
-                if (
-                    req.method ===
-                    "OPTIONS"
-                ) {
-
-                    return res.sendStatus(
-                        204
-                    );
-
+                if (req.method === "OPTIONS") {
+                    return res.sendStatus(204);
                 }
 
-
                 next();
-
             }
         );
 
-
-        this.app.use(
-            express.json()
-        );
-
+        this.app.use(express.json());
 
         this.app.use(
             express.static(__dirname)
         );
 
-
         console.log(
             "__dirname:",
             __dirname
         );
-
 
         this.app.use(
             (req, res, next) => {
@@ -315,7 +217,6 @@ class Bridge extends EventEmitter {
                 );
 
                 next();
-
             }
         );
 
@@ -327,11 +228,9 @@ class Bridge extends EventEmitter {
         this.app.get(
             "/test",
             (req, res) => {
-
                 res.send(
                     "Express is working!"
                 );
-
             }
         );
 
@@ -350,7 +249,6 @@ class Bridge extends EventEmitter {
                         "overlay.html"
                     )
                 );
-
             }
         );
 
@@ -367,10 +265,8 @@ class Bridge extends EventEmitter {
 
                     const identifier =
                         String(
-                            req.params.identifier ||
-                            ""
+                            req.params.identifier || ""
                         ).trim();
-
 
                     if (!identifier) {
 
@@ -379,15 +275,12 @@ class Bridge extends EventEmitter {
                             .send(
                                 "Missing overlay identifier."
                             );
-
                     }
-
 
                     let account =
                         await Account.loadByOverlayId(
                             identifier
                         );
-
 
                     if (!account) {
 
@@ -395,9 +288,7 @@ class Bridge extends EventEmitter {
                             await Account.loadByLogin(
                                 identifier.toLowerCase()
                             );
-
                     }
-
 
                     if (!account) {
 
@@ -407,9 +298,7 @@ class Bridge extends EventEmitter {
                                 <h2>The Bridge4K</h2>
                                 <p>Overlay not found.</p>
                             `);
-
                     }
-
 
                     res.sendFile(
                         path.join(
@@ -418,7 +307,6 @@ class Bridge extends EventEmitter {
                         )
                     );
 
-
                 } catch (err) {
 
                     console.error(
@@ -426,21 +314,18 @@ class Bridge extends EventEmitter {
                         err
                     );
 
-
                     res
                         .status(500)
                         .send(
                             "Failed to load overlay."
                         );
-
                 }
-
             }
         );
 
 
         // ========================================================
-        // Overlay Settings
+        // Overlay Settings GET
         // ========================================================
 
         this.app.get(
@@ -451,10 +336,8 @@ class Bridge extends EventEmitter {
 
                     const identifier =
                         String(
-                            req.params.identifier ||
-                            ""
+                            req.params.identifier || ""
                         ).trim();
-
 
                     if (!identifier) {
 
@@ -464,15 +347,12 @@ class Bridge extends EventEmitter {
                                 error:
                                     "Missing overlay identifier."
                             });
-
                     }
-
 
                     let account =
                         await Account.loadByOverlayId(
                             identifier
                         );
-
 
                     if (!account) {
 
@@ -480,9 +360,7 @@ class Bridge extends EventEmitter {
                             await Account.loadByLogin(
                                 identifier.toLowerCase()
                             );
-
                     }
-
 
                     if (!account) {
 
@@ -492,9 +370,7 @@ class Bridge extends EventEmitter {
                                 error:
                                     "Overlay not found."
                             });
-
                     }
-
 
                     const result =
                         await db.query(
@@ -511,10 +387,8 @@ class Bridge extends EventEmitter {
                             ]
                         );
 
-
                     const row =
                         result.rows[0];
-
 
                     return res.json({
 
@@ -522,15 +396,12 @@ class Bridge extends EventEmitter {
                             account.overlayId,
 
                         hiddenBots:
-                            row?.hidden_bots ||
-                            "",
+                            row?.hidden_bots || "",
 
                         showCommands:
-                            row?.show_commands ===
-                            true
+                            row?.show_commands === true
 
                     });
-
 
                 } catch (err) {
 
@@ -539,19 +410,20 @@ class Bridge extends EventEmitter {
                         err
                     );
 
-
                     return res
                         .status(500)
                         .json({
                             error:
                                 "Failed to load overlay settings."
                         });
-
                 }
-
             }
         );
 
+
+        // ========================================================
+        // Overlay Settings POST
+        // ========================================================
 
         this.app.post(
             "/overlay/:identifier/settings",
@@ -561,10 +433,8 @@ class Bridge extends EventEmitter {
 
                     const identifier =
                         String(
-                            req.params.identifier ||
-                            ""
+                            req.params.identifier || ""
                         ).trim();
-
 
                     if (!identifier) {
 
@@ -574,15 +444,12 @@ class Bridge extends EventEmitter {
                                 error:
                                     "Missing overlay identifier."
                             });
-
                     }
-
 
                     let account =
                         await Account.loadByOverlayId(
                             identifier
                         );
-
 
                     if (!account) {
 
@@ -590,9 +457,7 @@ class Bridge extends EventEmitter {
                             await Account.loadByLogin(
                                 identifier.toLowerCase()
                             );
-
                     }
-
 
                     if (!account) {
 
@@ -602,16 +467,13 @@ class Bridge extends EventEmitter {
                                 error:
                                     "Overlay not found."
                             });
-
                     }
-
 
                     const rawHiddenBots =
                         typeof req.body?.hiddenBots ===
                         "string"
                             ? req.body.hiddenBots
                             : "";
-
 
                     const hiddenBots =
                         rawHiddenBots
@@ -629,17 +491,13 @@ class Bridge extends EventEmitter {
                                     index,
                                     list
                                 ) =>
-                                    list.indexOf(
-                                        bot
-                                    ) === index
+                                    list.indexOf(bot) ===
+                                    index
                             )
                             .join(",");
 
-
                     const showCommands =
-                        req.body?.showCommands ===
-                        true;
-
+                        req.body?.showCommands === true;
 
                     await db.query(
                         `
@@ -669,7 +527,6 @@ class Bridge extends EventEmitter {
                         ]
                     );
 
-
                     return res.json({
 
                         success: true,
@@ -683,7 +540,6 @@ class Bridge extends EventEmitter {
 
                     });
 
-
                 } catch (err) {
 
                     console.error(
@@ -691,16 +547,13 @@ class Bridge extends EventEmitter {
                         err
                     );
 
-
                     return res
                         .status(500)
                         .json({
                             error:
                                 "Failed to save overlay settings."
                         });
-
                 }
-
             }
         );
 
@@ -722,12 +575,10 @@ class Bridge extends EventEmitter {
                     )
                 );
 
-
                 try {
 
                     const message =
                         req.body || {};
-
 
                     const broadcasterId =
                         message.broadcaster?.user_id ??
@@ -737,7 +588,6 @@ class Bridge extends EventEmitter {
                         message.channel?.id ??
                         null;
 
-
                     const broadcasterLogin =
                         message.broadcaster?.username ||
                         message.broadcaster?.login ||
@@ -745,26 +595,21 @@ class Bridge extends EventEmitter {
                         message.channel?.login ||
                         null;
 
-
-                    let connection =
-                        null;
-
+                    let connection = null;
 
                     if (
-                        broadcasterId !==
-                        null
+                        broadcasterId !== null
                     ) {
 
                         connection =
-                            await PlatformConnections.loadByPlatformUserId(
-                                "kick",
-                                String(
-                                    broadcasterId
-                                )
-                            );
-
+                            await PlatformConnections
+                                .loadByPlatformUserId(
+                                    "kick",
+                                    String(
+                                        broadcasterId
+                                    )
+                                );
                     }
-
 
                     if (
                         !connection &&
@@ -772,13 +617,12 @@ class Bridge extends EventEmitter {
                     ) {
 
                         connection =
-                            await PlatformConnections.loadByPlatformLogin(
-                                "kick",
-                                broadcasterLogin
-                            );
-
+                            await PlatformConnections
+                                .loadByPlatformLogin(
+                                    "kick",
+                                    broadcasterLogin
+                                );
                     }
-
 
                     if (!connection) {
 
@@ -790,21 +634,14 @@ class Bridge extends EventEmitter {
                             }
                         );
 
-
-                        return res.sendStatus(
-                            200
-                        );
-
+                        return res.sendStatus(200);
                     }
-
 
                     this.send({
 
-                        type:
-                            "message",
+                        type: "message",
 
-                        platform:
-                            "kick",
+                        platform: "kick",
 
                         overlayId:
                             connection.overlayId,
@@ -816,10 +653,8 @@ class Bridge extends EventEmitter {
 
                         text:
                             buildKickEmoteHtml(
-                                message.content ||
-                                    "",
-                                message.emotes ||
-                                    []
+                                message.content || "",
+                                message.emotes || []
                             ).text,
 
                         userId:
@@ -833,14 +668,9 @@ class Bridge extends EventEmitter {
 
                         timestamp:
                             Date.now()
-
                     });
 
-
-                    return res.sendStatus(
-                        200
-                    );
-
+                    return res.sendStatus(200);
 
                 } catch (err) {
 
@@ -849,13 +679,8 @@ class Bridge extends EventEmitter {
                         err
                     );
 
-
-                    return res.sendStatus(
-                        500
-                    );
-
+                    return res.sendStatus(500);
                 }
-
             }
         );
 
@@ -871,11 +696,9 @@ class Bridge extends EventEmitter {
                 const result =
                     TwitchAuth.buildLoginURL();
 
-
                 res.redirect(
                     result.url
                 );
-
             }
         );
 
@@ -911,6 +734,215 @@ class Bridge extends EventEmitter {
 
 
         // ========================================================
+        // Account / Overlay Status
+        // ========================================================
+
+        this.app.get(
+            "/account/status",
+            async (req, res) => {
+
+                try {
+
+                    const login =
+                        String(
+                            req.query.login || ""
+                        )
+                            .trim()
+                            .toLowerCase();
+
+                    if (!login) {
+
+                        return res
+                            .status(400)
+                            .json({
+                                found: false,
+                                error:
+                                    "Missing login."
+                            });
+                    }
+
+                    const account =
+                        await Account.loadByLogin(
+                            login
+                        );
+
+                    if (!account) {
+
+                        return res
+                            .status(404)
+                            .json({
+                                found: false,
+                                error:
+                                    "Account not found."
+                            });
+                    }
+
+                    return res.json({
+
+                        found: true,
+
+                        overlayId:
+                            account.overlayId,
+
+                        login:
+                            account.login,
+
+                        displayName:
+                            account.displayName ||
+                            null
+                    });
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ Failed to load account status:",
+                        err
+                    );
+
+                    return res
+                        .status(500)
+                        .json({
+                            found: false,
+                            error:
+                                "Failed to load account status."
+                        });
+                }
+            }
+        );
+
+
+        // ========================================================
+        // Platform Connection Status
+        // ========================================================
+
+        this.app.get(
+            "/platform/status",
+            async (req, res) => {
+
+                try {
+
+                    const login =
+                        String(
+                            req.query.login || ""
+                        )
+                            .trim()
+                            .toLowerCase();
+
+                    const platform =
+                        String(
+                            req.query.platform || ""
+                        )
+                            .trim()
+                            .toLowerCase();
+
+                    if (!login) {
+
+                        return res
+                            .status(400)
+                            .json({
+                                connected: false,
+                                error:
+                                    "Missing login."
+                            });
+                    }
+
+                    if (
+                        ![
+                            "twitch",
+                            "kick",
+                            "youtube"
+                        ].includes(platform)
+                    ) {
+
+                        return res
+                            .status(400)
+                            .json({
+                                connected: false,
+                                error:
+                                    "Invalid platform."
+                            });
+                    }
+
+                    let connection = null;
+
+                    const account =
+                        await Account.loadByLogin(
+                            login
+                        );
+
+                    if (
+                        account &&
+                        account.overlayId
+                    ) {
+
+                        connection =
+                            await PlatformConnections.load(
+                                account.overlayId,
+                                platform
+                            );
+                    }
+
+                    if (!connection) {
+
+                        connection =
+                            await PlatformConnections
+                                .loadByPlatformLogin(
+                                    platform,
+                                    login
+                                );
+                    }
+
+                    if (!connection) {
+
+                        return res.json({
+
+                            connected: false,
+
+                            platform,
+
+                            displayName: null,
+
+                            login: null
+
+                        });
+                    }
+
+                    return res.json({
+
+                        connected: true,
+
+                        platform,
+
+                        displayName:
+                            connection.displayName ||
+                            null,
+
+                        login:
+                            connection.login ||
+                            null
+
+                    });
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ Failed to check platform status:",
+                        err
+                    );
+
+                    return res
+                        .status(500)
+                        .json({
+                            connected: false,
+                            error:
+                                "Failed to check platform status."
+                        });
+                }
+            }
+        );
+
+
+        // ========================================================
         // Kick Connection Status
         // ========================================================
 
@@ -923,47 +955,38 @@ class Bridge extends EventEmitter {
                     const login =
                         req.query.login;
 
-
                     if (!login) {
 
                         return res
                             .status(400)
                             .json({
-                                connected:
-                                    false,
+                                connected: false,
                                 error:
                                     "Missing login."
                             });
-
                     }
-
 
                     const account =
                         await Account.loadByLogin(
                             login
                         );
 
-
                     if (!account) {
 
                         return res
                             .status(404)
                             .json({
-                                connected:
-                                    false,
+                                connected: false,
                                 error:
                                     "Account not found."
                             });
-
                     }
-
 
                     const connection =
                         await PlatformConnections.load(
                             account.overlayId,
                             "kick"
                         );
-
 
                     return res.json({
 
@@ -980,7 +1003,6 @@ class Bridge extends EventEmitter {
 
                     });
 
-
                 } catch (err) {
 
                     console.error(
@@ -988,18 +1010,14 @@ class Bridge extends EventEmitter {
                         err
                     );
 
-
                     return res
                         .status(500)
                         .json({
-                            connected:
-                                false,
+                            connected: false,
                             error:
                                 "Failed to check Kick status."
                         });
-
                 }
-
             }
         );
 
@@ -1033,12 +1051,10 @@ class Bridge extends EventEmitter {
                 this.app
             );
 
-
         this.wss =
             new WebSocket.Server({
                 server
             });
-
 
         server.listen(
             PORT,
@@ -1047,7 +1063,6 @@ class Bridge extends EventEmitter {
                 console.log(
                     `The Bridge4K running on port ${PORT}`
                 );
-
             }
         );
 
@@ -1064,7 +1079,6 @@ class Bridge extends EventEmitter {
                     "🖥 Overlay Connected"
                 );
 
-
                 try {
 
                     const url =
@@ -1073,12 +1087,10 @@ class Bridge extends EventEmitter {
                             `http://${req.headers.host || "localhost"}`
                         );
 
-
                     let overlayId =
                         url.searchParams.get(
                             "overlayId"
                         );
-
 
                     if (!overlayId) {
 
@@ -1087,43 +1099,33 @@ class Bridge extends EventEmitter {
                                 /^\/overlay\/([^/]+)$/
                             );
 
-
                         if (match) {
 
                             const login =
                                 match[1]
                                     .toLowerCase();
 
-
                             const account =
                                 await Account.loadByLogin(
                                     login
                                 );
 
-
                             if (account) {
 
                                 overlayId =
                                     account.overlayId;
-
                             }
-
                         }
-
                     }
-
 
                     if (!overlayId) {
 
                         overlayId =
                             this.defaultOverlayId;
-
                     }
-
 
                     ws.overlayId =
                         overlayId;
-
 
                     console.log(
                         "🎯 Overlay ID:",
@@ -1131,14 +1133,12 @@ class Bridge extends EventEmitter {
                             "none"
                     );
 
-
                     if (overlayId) {
 
                         const broadcasterId =
                             this.broadcasters.get(
                                 overlayId
                             );
-
 
                         if (broadcasterId) {
 
@@ -1155,11 +1155,8 @@ class Bridge extends EventEmitter {
 
                                 })
                             );
-
                         }
-
                     }
-
 
                 } catch (err) {
 
@@ -1167,9 +1164,7 @@ class Bridge extends EventEmitter {
                         "❌ WebSocket initialization failed:",
                         err
                     );
-
                 }
-
             }
         );
 
@@ -1187,7 +1182,6 @@ class Bridge extends EventEmitter {
                         data
                     );
 
-
                 this.wss.clients.forEach(
                     (client) => {
 
@@ -1195,30 +1189,22 @@ class Bridge extends EventEmitter {
                             client.readyState !==
                             WebSocket.OPEN
                         ) {
-
                             return;
-
                         }
-
 
                         if (
                             data.overlayId &&
                             client.overlayId !==
                                 data.overlayId
                         ) {
-
                             return;
-
                         }
-
 
                         client.send(
                             payload
                         );
-
                     }
                 );
-
             }
         );
 
@@ -1228,7 +1214,6 @@ class Bridge extends EventEmitter {
         // ========================================================
 
         this.loadDefaultAccount();
-
     }
 
 
@@ -1245,11 +1230,8 @@ class Bridge extends EventEmitter {
             !overlayId ||
             !username
         ) {
-
             return false;
-
         }
-
 
         try {
 
@@ -1266,16 +1248,11 @@ class Bridge extends EventEmitter {
                     ]
                 );
 
-
             if (
-                result.rows.length ===
-                0
+                result.rows.length === 0
             ) {
-
                 return false;
-
             }
-
 
             const hiddenBots =
                 String(
@@ -1291,15 +1268,11 @@ class Bridge extends EventEmitter {
                     )
                     .filter(Boolean);
 
-
             return hiddenBots.includes(
-                String(
-                    username
-                )
+                String(username)
                     .trim()
                     .toLowerCase()
             );
-
 
         } catch (err) {
 
@@ -1308,11 +1281,8 @@ class Bridge extends EventEmitter {
                 err
             );
 
-
             return false;
-
         }
-
     }
 
 
@@ -1326,31 +1296,21 @@ class Bridge extends EventEmitter {
     ) {
 
         if (!text) {
-
             return false;
-
         }
-
 
         const message =
             String(text).trim();
 
-
         if (
             !message.startsWith("!")
         ) {
-
             return false;
-
         }
-
 
         if (!overlayId) {
-
             return true;
-
         }
-
 
         try {
 
@@ -1367,15 +1327,12 @@ class Bridge extends EventEmitter {
                     ]
                 );
 
-
             const showCommands =
                 result.rows.length > 0 &&
                 result.rows[0]
                     .show_commands === true;
 
-
             return !showCommands;
-
 
         } catch (err) {
 
@@ -1384,14 +1341,8 @@ class Bridge extends EventEmitter {
                 err
             );
 
-
-            // Fail closed.
-            // Commands stay hidden if the
-            // setting cannot be read.
             return true;
-
         }
-
     }
 
 
@@ -1406,7 +1357,6 @@ class Bridge extends EventEmitter {
             const accounts =
                 await Account.loadAll();
 
-
             if (
                 accounts.length > 0
             ) {
@@ -1414,14 +1364,11 @@ class Bridge extends EventEmitter {
                 this.defaultOverlayId =
                     accounts[0].overlayId;
 
-
                 console.log(
                     "🎯 Default overlay:",
                     this.defaultOverlayId
                 );
-
             }
-
 
         } catch (err) {
 
@@ -1429,9 +1376,7 @@ class Bridge extends EventEmitter {
                 "❌ Failed to load default account:",
                 err
             );
-
         }
-
     }
 
 
@@ -1491,10 +1436,8 @@ class Bridge extends EventEmitter {
 
                 timestamp:
                     Date.now()
-
             }
         );
-
     }
 
 
@@ -1514,19 +1457,15 @@ class Bridge extends EventEmitter {
                 id
             );
 
-
             console.log(
                 `📺 Broadcaster mapped: ${overlayId} → ${id}`
             );
-
 
         } else {
 
             this.broadcasterId =
                 id;
-
         }
-
 
         this.send({
 
@@ -1537,11 +1476,8 @@ class Bridge extends EventEmitter {
                 id,
 
             overlayId
-
         });
-
     }
-
 }
 
 
@@ -1558,16 +1494,13 @@ class Bridge extends EventEmitter {
                 "SELECT NOW()"
             );
 
-
         console.log(
             "✅ Connected to Postgres!"
         );
 
-
         console.log(
             result.rows[0]
         );
-
 
     } catch (err) {
 
@@ -1575,11 +1508,9 @@ class Bridge extends EventEmitter {
             "❌ Postgres connection failed:"
         );
 
-
         console.error(
             err
         );
-
     }
 
 })();
@@ -1591,7 +1522,6 @@ class Bridge extends EventEmitter {
 
 const bridge =
     new Bridge();
-
 
 bridge.loadDefaultAccount();
 
@@ -1611,7 +1541,6 @@ module.exports =
 require(
     "./platforms/twitch"
 );
-
 
 require(
     "./platforms/youtube"
