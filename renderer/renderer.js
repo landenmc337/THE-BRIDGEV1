@@ -214,7 +214,7 @@ function createText(data) {
         html = `
             <span
                 class="deeno-message"
-                style="color:#8B0000;"
+                style="color:#FF1A1A;"
             >
                 ${html}
             </span>
