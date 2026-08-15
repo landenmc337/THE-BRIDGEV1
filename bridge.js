@@ -576,76 +576,41 @@ class Bridge extends EventEmitter {
         // Twitch Auth
         // ========================================================
 
-        this.app.get(
-            "/auth/twitch",
-            async (req, res) => {
+       this.app.get(
+    "/auth/twitch",
+    (req, res) => {
 
-                try {
+        try {
 
-                    const overlayId =
-                        String(
-                            req.query.overlayId || ""
-                        ).trim();
+            const login =
+                String(
+                    req.query.login || ""
+                ).trim();
 
-                    const login =
-                        String(
-                            req.query.login || ""
-                        ).trim();
+            const result =
+                TwitchAuth.buildLoginURL(
+                    login || null
+                );
 
-                    if (!overlayId && !login) {
+            res.redirect(
+                result.url
+            );
 
-                        return res
-                            .status(400)
-                            .send(
-                                "Missing overlayId or login."
-                            );
-                    }
+        } catch (err) {
 
-                    let account =
-                        overlayId
-                            ? await Account.loadByOverlayId(
-                                overlayId
-                            )
-                            : null;
+            console.error(
+                "❌ Twitch auth failed:",
+                err
+            );
 
-                    if (!account && login) {
-
-                        account =
-                            await Account.loadByLogin(
-                                login.toLowerCase()
-                            );
-                    }
-
-                    if (!account) {
-
-                        return res
-                            .status(404)
-                            .send(
-                                "Account not found."
-                            );
-                    }
-
-                    return res.redirect(
-                        TwitchAuth.getAuthUrl(
-                            account.overlayId
-                        )
-                    );
-
-                } catch (err) {
-
-                    console.error(
-                        "❌ Twitch auth failed:",
-                        err
-                    );
-
-                    return res
-                        .status(500)
-                        .send(
-                            "Twitch authentication failed."
-                        );
-                }
-            }
-        );
+            res
+                .status(500)
+                .send(
+                    "Twitch authentication failed."
+                );
+        }
+    }
+);
 
 
         // ========================================================
