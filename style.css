@@ -211,7 +211,7 @@ body {
 }
 
 .message-content {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
     max-width: 100%;
 
@@ -219,8 +219,15 @@ body {
 
     box-sizing: border-box;
 
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+.message-content .username,
+.message-content .text {
+    display: inline;
+    white-space: normal;
 }
 
 .username-pill {
