@@ -53,7 +53,9 @@ root.style.setProperty(
 
 root.style.setProperty(
     "--show-platform-icons",
-    RelaySettings.showPlatformIcons ? "1" : "0"
+    RelaySettings.showPlatformIcons
+        ? "1"
+        : "0"
 );
 
 // ===============================
@@ -115,6 +117,7 @@ switch (RelaySettings.theme) {
 
         break;
 
+
     case "dark":
 
         root.style.setProperty(
@@ -133,6 +136,7 @@ switch (RelaySettings.theme) {
         );
 
         break;
+
 
     case "glow":
 
@@ -162,6 +166,7 @@ switch (RelaySettings.theme) {
         );
 
         break;
+
 
     case "red":
 
@@ -218,19 +223,23 @@ console.log(
 chat.style.bottom =
     `${RelaySettings.y}px`;
 
-if (RelaySettings.align === "right") {
+if (
+    RelaySettings.align === "right"
+) {
 
     chat.style.right =
         `${RelaySettings.x}px`;
 
-    chat.style.left = "auto";
+    chat.style.left =
+        "auto";
 
 } else {
 
     chat.style.left =
         `${RelaySettings.x}px`;
 
-    chat.style.right = "auto";
+    chat.style.right =
+        "auto";
 }
 
 // ===============================
@@ -305,7 +314,9 @@ socket.onmessage = async (event) => {
     const data =
         JSON.parse(event.data);
 
-    if (data.type === "init") {
+    if (
+        data.type === "init"
+    ) {
 
         console.log(
             "🎯 Overlay initialized:",
@@ -333,17 +344,44 @@ socket.onmessage = async (event) => {
     addMessage(data);
 };
 
+
+// ===============================
+// Automatic Update Detection
+// ===============================
+//
+// When Railway deploys a new version,
+// the existing WebSocket connection
+// closes. Instead of leaving the user
+// stuck on the old version, reload the
+// overlay automatically.
+//
+// This means users do NOT have to
+// manually refresh their OBS browser
+// source after deployments.
+// ===============================
+
 socket.onclose = () => {
 
     console.log(
-        "Disconnected"
+        "🔴 Bridge4K connection closed."
     );
+
+    console.log(
+        "🔄 Reloading overlay automatically..."
+    );
+
+    setTimeout(() => {
+
+        window.location.reload();
+
+    }, 1500);
 };
+
 
 socket.onerror = (error) => {
 
     console.error(
-        "WebSocket error:",
+        "⚠️ WebSocket error:",
         error
     );
 };

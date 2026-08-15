@@ -1,38 +1,66 @@
 function createPlatform(data) {
 
-    if (!data.platform || data.platform === "system") {
+    if (
+        !data.platform ||
+        data.platform === "system"
+    ) {
         return "";
     }
 
-    const platform = PlatformManager.normalize(data.platform);
-    const icon = IconManager.get(platform);
+    const platform =
+        PlatformManager.normalize(
+            data.platform
+        );
+
+    const icon =
+        IconManager.get(
+            platform
+        );
 
     if (!icon) {
         return "";
     }
 
-    return `<img class="platform-icon" src="${icon}" alt="${data.platform}">`;
+    return `
+        <img
+            class="platform-icon"
+            src="${icon}"
+            alt="${data.platform}"
+        >
+    `;
 }
 
 
 function createBadges(data) {
 
-    let html = '<span class="badges">';
+    let html =
+        '<span class="badges">';
+
 
     // Twitch / YouTube badges
     if (data.badges) {
 
-        for (const [badge, version] of Object.entries(data.badges)) {
-
-            const badgePath = AssetManager.getBadge(
-                data.platform,
+        for (
+            const [
                 badge,
-                version,
-                data.channelId,
-                data.overlayId
-            );
+                version
+            ] of Object.entries(
+                data.badges
+            )
+        ) {
 
-            if (!badgePath) continue;
+            const badgePath =
+                AssetManager.getBadge(
+                    data.platform,
+                    badge,
+                    version,
+                    data.channelId,
+                    data.overlayId
+                );
+
+            if (!badgePath) {
+                continue;
+            }
 
             html += `
                 <img
@@ -40,18 +68,21 @@ function createBadges(data) {
                     src="${badgePath}"
                     alt="${badge}"
                     title="${badge}"
-                >`;
-
+                >
+            `;
         }
     }
 
 
     // 7TV Badge
-    if (data.sevenTV?.badge?.images?.length) {
+    if (
+        data.sevenTV?.badge?.images?.length
+    ) {
 
         const badgeUrl =
             data.sevenTV.badge.images.find(
-                img => img.scale === 4
+                img =>
+                    img.scale === 4
             )?.url ??
             data.sevenTV.badge.images[0].url;
 
@@ -61,26 +92,35 @@ function createBadges(data) {
                 src="${badgeUrl}"
                 alt="${data.sevenTV.badge.name}"
                 title="${data.sevenTV.badge.name}"
-            >`;
-
+            >
+        `;
     }
 
-    html += "</span>";
+    html +=
+        "</span>";
 
-    return html === '<span class="badges"></span>'
+    return html ===
+        '<span class="badges"></span>'
         ? ""
         : html;
 }
 
 
-function getFallbackColor(username) {
+function getFallbackColor(
+    username
+) {
 
     let hash = 0;
 
-    for (const char of username.toLowerCase()) {
+    for (
+        const char of username.toLowerCase()
+    ) {
+
         hash =
-            (hash * 31 + char.charCodeAt(0)) |
-            0;
+            (
+                hash * 31 +
+                char.charCodeAt(0)
+            ) | 0;
     }
 
     const hue =
@@ -99,17 +139,20 @@ function createUsername(data) {
             )
             : null;
 
-    const css = style
-        ? Object.entries(style)
-            .map(
-                ([key, value]) =>
-                    `${key.replace(
-                        /[A-Z]/g,
-                        m => "-" + m.toLowerCase()
-                    )}:${value}`
-            )
-            .join(";")
-        : "";
+    const css =
+        style
+            ? Object.entries(style)
+                .map(
+                    ([key, value]) =>
+                        `${key.replace(
+                            /[A-Z]/g,
+                            m =>
+                                "-" +
+                                m.toLowerCase()
+                        )}:${value}`
+                )
+                .join(";")
+            : "";
 
     const usernameColor =
         data.color ||
@@ -120,7 +163,14 @@ function createUsername(data) {
     const colorStyle =
         `color:${usernameColor};`;
 
-    return `<span class="username" style="${colorStyle}${css}">${data.username}:</span>`;
+    return `
+        <span
+            class="username"
+            style="${colorStyle}${css}"
+        >
+            ${data.username}:
+        </span>
+    `;
 }
 
 
@@ -129,10 +179,12 @@ function createText(data) {
     let html =
         data.text || "";
 
+
     if (
         typeof EmoteManager !==
         "undefined"
     ) {
+
         html =
             EmoteManager.process(
                 html,
@@ -140,17 +192,23 @@ function createText(data) {
             );
     }
 
+
     if (
         typeof SevenTVManager !==
         "undefined"
     ) {
+
         html =
             SevenTVManager.process(
                 html
             );
     }
 
-    return `<span class="text">${html}</span>`;
+    return `
+        <span class="text">
+            ${html}
+        </span>
+    `;
 }
 
 
@@ -201,24 +259,120 @@ function addMessage(data) {
         return;
     }
 
+
+    // ========================================
+    // Twitch timeout control message
+    // ========================================
+
+    if (
+        data.type === "timeout"
+    ) {
+
+        const timeoutUserId =
+            String(
+                data.userId || ""
+            ).toLowerCase();
+
+        const timeoutUsername =
+            String(
+                data.username || ""
+            ).toLowerCase();
+
+
+        console.log(
+            "🧹 Removing timed-out Twitch user:",
+            timeoutUsername,
+            timeoutUserId
+        );
+
+
+        chat
+            .querySelectorAll(
+                ".message"
+            )
+            .forEach(
+                message => {
+
+                    const messageUserId =
+                        String(
+                            message.dataset.userId ||
+                            ""
+                        ).toLowerCase();
+
+                    const messageUsername =
+                        String(
+                            message.dataset.username ||
+                            ""
+                        ).toLowerCase();
+
+
+                    if (
+                        (
+                            timeoutUserId &&
+                            messageUserId ===
+                            timeoutUserId
+                        ) ||
+                        (
+                            timeoutUsername &&
+                            messageUsername ===
+                            timeoutUsername
+                        )
+                    ) {
+
+                        message.remove();
+                    }
+                }
+            );
+
+        return;
+    }
+
+
     const layoutName =
         RelaySettings.showBubble
             ? "bubble"
             : "classic";
 
+
     const html =
-        Layouts[layoutName](data);
+        Layouts[
+            layoutName
+        ](data);
+
 
     const message =
         document.createElement(
             "div"
         );
 
+
     message.className =
         `message layout-${layoutName} new-message`;
 
+
+    // Store Twitch user ID
+    if (data.userId) {
+
+        message.dataset.userId =
+            String(
+                data.userId
+            );
+    }
+
+
+    // Store username as fallback
+    if (data.username) {
+
+        message.dataset.username =
+            String(
+                data.username
+            ).toLowerCase();
+    }
+
+
     message.innerHTML =
         html;
+
 
     chat.appendChild(
         message
@@ -226,7 +380,7 @@ function addMessage(data) {
 
 
     // ========================================
-    // Keep only the newest 20 messages
+    // Keep only newest 20 messages
     // ========================================
 
     while (
@@ -266,35 +420,40 @@ function addMessage(data) {
     const fadeTimer =
         getFadeTimer();
 
-    if (fadeTimer > 0) {
+    if (
+        fadeTimer > 0
+    ) {
 
-        setTimeout(() => {
-
-            // Make sure the message
-            // is still in the chat.
-            if (
-                !message.isConnected
-            ) {
-                return;
-            }
-
-            message.classList.add(
-                "fade-out"
-            );
-
-
-            // Match the CSS transition
-            // duration before removing it.
-            setTimeout(() => {
+        setTimeout(
+            () => {
 
                 if (
-                    message.isConnected
+                    !message.isConnected
                 ) {
-                    message.remove();
+                    return;
                 }
 
-            }, 450);
+                message.classList.add(
+                    "fade-out"
+                );
 
-        }, fadeTimer * 1000);
+
+                setTimeout(
+                    () => {
+
+                        if (
+                            message.isConnected
+                        ) {
+
+                            message.remove();
+                        }
+
+                    },
+                    450
+                );
+
+            },
+            fadeTimer * 1000
+        );
     }
 }

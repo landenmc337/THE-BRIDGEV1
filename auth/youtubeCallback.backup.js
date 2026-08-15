@@ -1,15 +1,12 @@
 const Account = require("../data/account");
 const PlatformConnections = require("../data/platformConnections");
 const YouTubeAuth = require("./youtube");
-const crypto = require("crypto");
-
 
 // ============================================================
 // Temporary OAuth State Storage
 // ============================================================
 
 const pendingStates = new Map();
-
 
 // ============================================================
 // Store Pending YouTube OAuth State
@@ -21,13 +18,11 @@ function storeState(state, data) {
         state,
         {
             ...data,
-            createdAt:
-                Date.now()
+            createdAt: Date.now()
         }
     );
 
 }
-
 
 // ============================================================
 // Get Pending YouTube OAuth State
@@ -41,7 +36,6 @@ function getState(state) {
 
 }
 
-
 // ============================================================
 // Create YouTube Login
 // ============================================================
@@ -51,47 +45,60 @@ async function createLogin(req, res) {
     try {
 
         const login =
-            req.query.login ||
-            null;
+            req.query.login;
 
+        if (!login) {
+
+            return res
+                .status(400)
+                .send(
+                    "Missing Bridge account login."
+                );
+
+        }
+
+        const account =
+            await Account.loadByLogin(
+                login.toLowerCase()
+            );
+
+        if (!account) {
+
+            return res
+                .status(404)
+                .send(
+                    "Bridge account not found."
+                );
+
+        }
 
         const result =
             YouTubeAuth.buildLoginURL();
 
-
         storeState(
             result.state,
             {
-                login
+                overlayId:
+                    account.overlayId,
+
+                login:
+                    account.login
             }
         );
 
-
         console.log(
-            "🎯 Starting YouTube OAuth"
+            "🎯 Starting YouTube OAuth for:",
+            account.login
         );
 
-
-        if (login) {
-
-            console.log(
-                "🎯 Existing Bridge login:",
-                login
-            );
-
-        } else {
-
-            console.log(
-                "🎯 YouTube will create a new Bridge account"
-            );
-
-        }
-
+        console.log(
+            "🎯 Overlay ID:",
+            account.overlayId
+        );
 
         return res.redirect(
             result.url
         );
-
 
     } catch (err) {
 
@@ -99,10 +106,7 @@ async function createLogin(req, res) {
             "❌ Failed to create YouTube login:"
         );
 
-        console.error(
-            err
-        );
-
+        console.error(err);
 
         return res
             .status(500)
@@ -113,7 +117,6 @@ async function createLogin(req, res) {
     }
 
 }
-
 
 // ============================================================
 // YouTube OAuth Callback
@@ -126,13 +129,11 @@ async function callback(req, res) {
         req.query
     );
 
-
     const {
         code,
         state,
         error
     } = req.query;
-
 
     // --------------------------------------------------------
     // Google returned an error
@@ -145,14 +146,12 @@ async function callback(req, res) {
             error
         );
 
-
         return res.send(`
             <h2>The Bridge4K</h2>
             <p>YouTube login failed.</p>
         `);
 
     }
-
 
     // --------------------------------------------------------
     // Validate authorization code
@@ -168,7 +167,6 @@ async function callback(req, res) {
 
     }
 
-
     // --------------------------------------------------------
     // Validate OAuth state
     // --------------------------------------------------------
@@ -183,10 +181,8 @@ async function callback(req, res) {
 
     }
 
-
     const pending =
         getState(state);
-
 
     if (!pending) {
 
@@ -198,13 +194,11 @@ async function callback(req, res) {
 
     }
 
-
     // Remove state immediately so it
     // cannot be reused.
     pendingStates.delete(
         state
     );
-
 
     // --------------------------------------------------------
     // Expire old OAuth attempts
@@ -213,7 +207,6 @@ async function callback(req, res) {
     const stateAge =
         Date.now() -
         pending.createdAt;
-
 
     if (
         stateAge >
@@ -228,8 +221,37 @@ async function callback(req, res) {
 
     }
 
-
     try {
+
+        // ====================================================
+        // Verify Bridge Account
+        // ====================================================
+
+        const account =
+            await Account.loadByLogin(
+                pending.login
+            );
+
+        if (!account) {
+
+            throw new Error(
+                "Bridge account could not be found."
+            );
+
+        }
+
+        // Make sure the account hasn't changed
+        // between login and callback.
+        if (
+            account.overlayId !==
+            pending.overlayId
+        ) {
+
+            throw new Error(
+                "Bridge account overlay mismatch."
+            );
+
+        }
 
         // ====================================================
         // Exchange Authorization Code
@@ -240,11 +262,9 @@ async function callback(req, res) {
                 code
             );
 
-
         console.log(
             "✅ YouTube OAuth successful."
         );
-
 
         if (!tokens.access_token) {
 
@@ -254,7 +274,6 @@ async function callback(req, res) {
 
         }
 
-
         // ====================================================
         // Get Authenticated YouTube API
         // ====================================================
@@ -263,7 +282,6 @@ async function callback(req, res) {
             await YouTubeAuth.getAuthenticatedYouTube(
                 tokens
             );
-
 
         // ====================================================
         // Get Connected YouTube Channel
@@ -277,20 +295,16 @@ async function callback(req, res) {
                     "id"
                 ],
 
-                mine:
-                    true
+                mine: true
 
             });
-
 
         const channels =
             channelResponse.data.items ||
             [];
 
-
         const channel =
             channels[0];
-
 
         if (!channel) {
 
@@ -300,157 +314,32 @@ async function callback(req, res) {
 
         }
 
-
         const channelId =
             String(
                 channel.id
             );
 
-
         const displayName =
             channel.snippet?.title ||
             "YouTube User";
 
-
-        const youtubeLogin =
+        const login =
             channelId;
-
 
         console.log(
             "📺 YouTube Channel:",
             displayName
         );
 
-
         console.log(
             "🆔 YouTube Channel ID:",
             channelId
         );
 
-
-        // ====================================================
-        // Find Existing Bridge Account
-        // ====================================================
-
-        let account =
-            null;
-
-
-        /*
-         * If a creator already has a Bridge account,
-         * attach YouTube to that existing overlay.
-         */
-
-        if (pending.login) {
-
-            account =
-                await Account.loadByLogin(
-                    pending.login.toLowerCase()
-                );
-
-
-            if (!account) {
-
-                throw new Error(
-                    "Bridge account could not be found."
-                );
-
-            }
-
-        }
-
-
-        /*
-         * If YouTube is already connected to a Bridge
-         * account, reuse that account.
-         */
-
-        if (!account) {
-
-            const existingYouTube =
-                await PlatformConnections.loadByPlatformUserId(
-                    "youtube",
-                    channelId
-                );
-
-
-            if (existingYouTube) {
-
-                account =
-                    await Account.loadByOverlayId(
-                        existingYouTube.overlayId
-                    );
-
-            }
-
-        }
-
-
-        // ====================================================
-        // Create Bridge Account If YouTube Is First
-        // ====================================================
-
-        const overlayId =
-            account?.overlayId ||
-            "ovl_" +
-            crypto.randomBytes(8).toString("hex");
-
-
-        const bridgeLogin =
-            account?.login ||
-            youtubeLogin;
-
-
-        const bridgeDisplayName =
-            account?.displayName ||
-            displayName;
-
-
-        if (!account) {
-
-            await Account.save({
-
-                overlayId,
-
-                displayName:
-                    bridgeDisplayName,
-
-                login:
-                    bridgeLogin,
-
-                userId:
-                    channelId,
-
-                accessToken:
-                    tokens.access_token,
-
-                refreshToken:
-                    tokens.refresh_token,
-
-                connectedAt:
-                    Date.now()
-
-            });
-
-
-            console.log(
-                "💾 New Bridge account created."
-            );
-
-        } else {
-
-            console.log(
-                "🔗 Existing Bridge account found."
-            );
-
-        }
-
-
         console.log(
             "🎯 Bridge Overlay ID:",
-            overlayId
+            account.overlayId
         );
-
 
         // ====================================================
         // Save YouTube Connection
@@ -458,7 +347,8 @@ async function callback(req, res) {
 
         await PlatformConnections.save({
 
-            overlayId,
+            overlayId:
+                account.overlayId,
 
             platform:
                 "youtube",
@@ -468,8 +358,7 @@ async function callback(req, res) {
 
             displayName,
 
-            login:
-                youtubeLogin,
+            login,
 
             accessToken:
                 tokens.access_token,
@@ -482,11 +371,9 @@ async function callback(req, res) {
 
         });
 
-
         console.log(
             "💾 YouTube connection saved."
         );
-
 
         // ====================================================
         // Return To Dashboard
@@ -497,27 +384,18 @@ async function callback(req, res) {
                 process.env.LANDING_URL ||
                 "http://localhost:3000"
             }/dashboard?login=${encodeURIComponent(
-                bridgeLogin
+                account.login
             )}`;
-
-
-        console.log(
-            "➡️ Returning to dashboard:",
-            dashboardUrl
-        );
-
 
         return res.redirect(
             dashboardUrl
         );
-
 
     } catch (err) {
 
         console.error(
             "❌ YouTube OAuth Callback Failed"
         );
-
 
         if (err.response) {
 
@@ -534,7 +412,6 @@ async function callback(req, res) {
 
         }
 
-
         return res
             .status(500)
             .send(
@@ -544,7 +421,6 @@ async function callback(req, res) {
     }
 
 }
-
 
 // ============================================================
 // Exports

@@ -7,144 +7,9 @@ const http = require("http");
 const TwitchAuth = require("./auth/twitch");
 const TwitchCallback = require("./auth/callback");
 const KickCallback = require("./auth/kickCallback");
-const YouTubeAuth = require("./auth/youtube");
-const YouTubeCallback = require("./auth/youtubeCallback");
 const Account = require("./data/account");
 const PlatformConnections = require("./data/platformConnections");
 const db = require("./database");
-
-function getFallbackChatColor(platform, username) {
-    const normalizedPlatform =
-        String(platform || "").toLowerCase();
-
-    const normalizedUsername =
-        String(username || "user");
-
-    const palettes = {
-        kick: [
-            "#53FC18",
-            "#7CFF4F",
-            "#22C55E",
-            "#A3E635",
-            "#34D399",
-            "#84CC16"
-        ],
-
-        youtube: [
-            "#FF4D4D",
-            "#FF6B6B",
-            "#F43F5E",
-            "#FB7185",
-            "#EF4444",
-            "#F97316"
-        ],
-
-        default: [
-            "#A970FF",
-            "#53FC18",
-            "#FF4D4D",
-            "#00F2EA",
-            "#F59E0B",
-            "#38BDF8"
-        ]
-    };
-
-    const palette =
-        palettes[normalizedPlatform] ||
-        palettes.default;
-
-    let hash = 0;
-
-    for (let i = 0; i < normalizedUsername.length; i++) {
-        hash =
-            ((hash << 5) - hash) +
-            normalizedUsername.charCodeAt(i);
-
-        hash |= 0;
-    }
-
-    return palette[
-        Math.abs(hash) % palette.length
-    ];
-}
-
-function resolveChatColor(data) {
-    const providedColor =
-        typeof data?.color === "string"
-            ? data.color.trim()
-            : "";
-
-    if (providedColor) {
-        return providedColor;
-    }
-
-    return getFallbackChatColor(
-        data?.platform,
-        data?.username
-    );
-}
-
-function renderKickEmotes(text, emotes = []) {
-    if (!text || !Array.isArray(emotes) || emotes.length === 0) {
-        return text || "";
-    }
-
-    const replacements = [];
-
-    for (const emote of emotes) {
-        const id = emote?.emote_id;
-
-        const positions =
-            Array.isArray(emote?.positions)
-                ? emote.positions
-                : [];
-
-        if (!id) continue;
-
-        for (const position of positions) {
-            const start =
-                Number(position?.s);
-
-            const end =
-                Number(position?.e);
-
-            if (
-                !Number.isInteger(start) ||
-                !Number.isInteger(end)
-            ) {
-                continue;
-            }
-
-            replacements.push({
-                start,
-                end,
-                id
-            });
-        }
-    }
-
-    replacements.sort(
-        (a, b) =>
-            b.start - a.start
-    );
-
-    let html = text;
-
-    for (const emote of replacements) {
-        const url =
-            `https://files.kick.com/emotes/${emote.id}/fullsize`;
-
-        const img =
-            `<img class="emote" src="${url}" alt="" loading="lazy" decoding="async" draggable="false">`;
-
-        html =
-            html.slice(0, emote.start) +
-            img +
-            html.slice(emote.end + 1);
-    }
-
-    return html;
-}
 
 class Bridge extends EventEmitter {
 
@@ -153,74 +18,40 @@ class Bridge extends EventEmitter {
         super();
 
         this.broadcasterId = null;
-
-        this.broadcasters =
-            new Map();
-
-        this.defaultOverlayId =
-            null;
+        this.broadcasters = new Map();
+        this.defaultOverlayId = null;
 
         const PORT =
             process.env.PORT || 3000;
 
-        this.app =
-            express();
+        this.app = express();
 
-        // ============================================================
-        // CORS
-        // ============================================================
+        this.app.use((req, res, next) => {
 
-        this.app.use(
-            (req, res, next) => {
+            res.header(
+                "Access-Control-Allow-Origin",
+                "http://localhost:3000"
+            );
 
-                const allowedOrigins = [
-                    "http://localhost:3000",
-                    "https://www.thebridge4k.com"
-                ];
+            res.header(
+                "Access-Control-Allow-Methods",
+                "GET,POST,OPTIONS"
+            );
 
-                const origin =
-                    req.headers.origin;
+            res.header(
+                "Access-Control-Allow-Headers",
+                "Content-Type"
+            );
 
-                if (
-                    allowedOrigins.includes(origin)
-                ) {
-
-                    res.header(
-                        "Access-Control-Allow-Origin",
-                        origin
-                    );
-
-                }
-
-                res.header(
-                    "Access-Control-Allow-Methods",
-                    "GET,POST,OPTIONS"
-                );
-
-                res.header(
-                    "Access-Control-Allow-Headers",
-                    "Content-Type"
-                );
-
-                if (
-                    req.method === "OPTIONS"
-                ) {
-
-                    return res.sendStatus(
-                        204
-                    );
-
-                }
-
-                next();
-
+            if (req.method === "OPTIONS") {
+                return res.sendStatus(204);
             }
-        );
+
+            next();
+        });
 
         this.app.use(
-            express.static(
-                __dirname
-            )
+            express.static(__dirname)
         );
 
         console.log(
@@ -241,6 +72,7 @@ class Bridge extends EventEmitter {
             }
         );
 
+
         // ============================
         // Test Route
         // ============================
@@ -255,6 +87,7 @@ class Bridge extends EventEmitter {
 
             }
         );
+
 
         // ============================
         // Overlay
@@ -274,50 +107,21 @@ class Bridge extends EventEmitter {
             }
         );
 
+
         this.app.get(
-            "/overlay/:identifier",
+            "/overlay/:login",
             async (req, res) => {
 
                 try {
 
-                    const identifier =
-                        String(
-                            req.params.identifier ||
-                            ""
-                        ).trim();
+                    const login =
+                        req.params.login
+                            .toLowerCase();
 
-                    if (!identifier) {
-
-                        return res
-                            .status(400)
-                            .send(
-                                "Missing overlay identifier."
-                            );
-
-                    }
-
-                    // New creator-specific URLs
-                    // use the permanent overlayId.
-                    let account =
-                        (
-                            await Account.loadAll()
-                        ).find(
-                            item =>
-                                item.overlayId ===
-                                identifier
-                        ) || null;
-
-                    // Keep existing
-                    // login-based URLs working
-                    // during the transition.
-                    if (!account) {
-
-                        account =
-                            await Account.loadByLogin(
-                                identifier.toLowerCase()
-                            );
-
-                    }
+                    const account =
+                        await Account.loadByLogin(
+                            login
+                        );
 
                     if (!account) {
 
@@ -353,8 +157,8 @@ class Bridge extends EventEmitter {
             }
         );
 
-        const fs =
-            require("fs");
+
+        const fs = require("fs");
 
         this.app.get(
             "/debug-overlay",
@@ -377,6 +181,7 @@ class Bridge extends EventEmitter {
             }
         );
 
+
         // ============================
         // Kick Webhook
         // ============================
@@ -388,11 +193,7 @@ class Bridge extends EventEmitter {
 
                 console.log(
                     "📨 Kick Webhook:",
-                    JSON.stringify(
-                        req.body,
-                        null,
-                        2
-                    )
+                    JSON.stringify(req.body, null, 2)
                 );
 
                 try {
@@ -415,20 +216,14 @@ class Bridge extends EventEmitter {
                         message.channel?.login ||
                         null;
 
-                    let connection =
-                        null;
+                    let connection = null;
 
-                    if (
-                        broadcasterId !==
-                        null
-                    ) {
+                    if (broadcasterId !== null) {
 
                         connection =
                             await PlatformConnections.loadByPlatformUserId(
                                 "kick",
-                                String(
-                                    broadcasterId
-                                )
+                                String(broadcasterId)
                             );
 
                     }
@@ -456,19 +251,14 @@ class Bridge extends EventEmitter {
                             }
                         );
 
-                        return res.sendStatus(
-                            200
-                        );
-
+                        return res.sendStatus(200);
                     }
 
                     this.send({
 
-                        type:
-                            "message",
+                        type: "message",
 
-                        platform:
-                            "kick",
+                        platform: "kick",
 
                         overlayId:
                             connection.overlayId,
@@ -479,12 +269,7 @@ class Bridge extends EventEmitter {
                             "Kick User",
 
                         text:
-                            renderKickEmotes(
-                                message.content ||
-                                "",
-                                message.emotes ||
-                                []
-                            ),
+                            message.content || "",
 
                         userId:
                             message.sender?.user_id ||
@@ -500,9 +285,7 @@ class Bridge extends EventEmitter {
 
                     });
 
-                    return res.sendStatus(
-                        200
-                    );
+                    return res.sendStatus(200);
 
                 } catch (err) {
 
@@ -511,14 +294,13 @@ class Bridge extends EventEmitter {
                         err
                     );
 
-                    return res.sendStatus(
-                        500
-                    );
+                    return res.sendStatus(500);
 
                 }
 
             }
         );
+
 
         // ============================
         // Twitch Login
@@ -528,13 +310,8 @@ class Bridge extends EventEmitter {
             "/auth/twitch",
             (req, res) => {
 
-                const login =
-                    req.query.login || null;
-
                 const result =
-                    TwitchAuth.buildLoginURL(
-                        login
-                    );
+                    TwitchAuth.buildLoginURL();
 
                 res.redirect(
                     result.url
@@ -543,23 +320,6 @@ class Bridge extends EventEmitter {
             }
         );
 
-        // ============================
-        // YouTube OAuth Callback
-        // ============================
-
-        this.app.get(
-            "/youtube/callback",
-            YouTubeCallback.callback
-        );
-
-        // ============================
-        // YouTube Login
-        // ============================
-
-        this.app.get(
-            "/youtube/login",
-            YouTubeCallback.createLogin
-        );
 
         // ============================
         // Twitch OAuth Callback
@@ -570,87 +330,6 @@ class Bridge extends EventEmitter {
             TwitchCallback
         );
 
-        // ============================
-        // Account / Overlay Status
-        // ============================
-
-        this.app.get(
-            "/account/status",
-            async (req, res) => {
-
-                try {
-
-                    const login =
-                        String(
-                            req.query.login ||
-                            ""
-                        ).trim();
-
-                    if (!login) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                found: false,
-                                error:
-                                    "Missing login."
-                            });
-
-                    }
-
-                    const account =
-                        await Account.loadByLogin(
-                            login.toLowerCase()
-                        );
-
-                    if (!account) {
-
-                        return res
-                            .status(404)
-                            .json({
-                                found: false,
-                                error:
-                                    "Account not found."
-                            });
-
-                    }
-
-                    return res.json({
-
-                        found:
-                            true,
-
-                        overlayId:
-                            account.overlayId,
-
-                        login:
-                            account.login,
-
-                        displayName:
-                            account.displayName ||
-                            null
-
-                    });
-
-                } catch (err) {
-
-                    console.error(
-                        "❌ Failed to load account status:",
-                        err
-                    );
-
-                    return res
-                        .status(500)
-                        .json({
-                            found: false,
-                            error:
-                                "Failed to load account status."
-                        });
-
-                }
-
-            }
-        );
 
         // ============================
         // Kick Connection Status
@@ -671,8 +350,7 @@ class Bridge extends EventEmitter {
                             .status(400)
                             .json({
                                 connected: false,
-                                error:
-                                    "Missing login."
+                                error: "Missing login."
                             });
 
                     }
@@ -688,8 +366,7 @@ class Bridge extends EventEmitter {
                             .status(404)
                             .json({
                                 connected: false,
-                                error:
-                                    "Account not found."
+                                error: "Account not found."
                             });
 
                     }
@@ -737,162 +414,6 @@ class Bridge extends EventEmitter {
             }
         );
 
-        // ============================
-        // Platform Connection Status
-        // ============================
-
-        this.app.get(
-            "/platform/status",
-            async (req, res) => {
-
-                try {
-
-                    const login =
-                        String(
-                            req.query.login || ""
-                        )
-                            .trim()
-                            .toLowerCase();
-
-                    const platform =
-                        String(
-                            req.query.platform || ""
-                        )
-                            .trim()
-                            .toLowerCase();
-
-                    if (!login) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                connected: false,
-                                error:
-                                    "Missing login."
-                            });
-
-                    }
-
-                    if (
-                        ![
-                            "twitch",
-                            "kick",
-                            "youtube"
-                        ].includes(platform)
-                    ) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                connected: false,
-                                error:
-                                    "Invalid platform."
-                            });
-
-                    }
-
-                    let connection = null;
-
-                    // ====================================================
-                    // First: Find the Bridge account
-                    // ====================================================
-
-                    const account =
-                        await Account.loadByLogin(
-                            login
-                        );
-
-                    // ====================================================
-                    // Second: Try the account's overlay ID
-                    // ====================================================
-
-                    if (
-                        account &&
-                        account.overlayId
-                    ) {
-
-                        connection =
-                            await PlatformConnections.load(
-                                account.overlayId,
-                                platform
-                            );
-
-                    }
-
-                    // ====================================================
-                    // Third: If not found, try the platform login
-                    // ====================================================
-
-                    if (!connection) {
-
-                        connection =
-                            await PlatformConnections.loadByPlatformLogin(
-                                platform,
-                                login
-                            );
-
-                    }
-
-                    // ====================================================
-                    // Return status
-                    // ====================================================
-
-                    if (!connection) {
-
-                        return res.json({
-
-                            connected: false,
-
-                            platform,
-
-                            displayName:
-                                null,
-
-                            login:
-                                null
-
-                        });
-
-                    }
-
-                    return res.json({
-
-                        connected: true,
-
-                        platform,
-
-                        displayName:
-                            connection.displayName ||
-                            null,
-
-                        login:
-                            connection.login ||
-                            null
-
-                    });
-
-                } catch (err) {
-
-                    console.error(
-                        "❌ Failed to check platform status:",
-                        err
-                    );
-
-                    return res
-                        .status(500)
-                        .json({
-
-                            connected: false,
-
-                            error:
-                                "Failed to check platform status."
-
-                        });
-
-                }
-
-            }
-        );
 
         // ============================
         // Kick Login
@@ -903,6 +424,7 @@ class Bridge extends EventEmitter {
             KickCallback.createLogin
         );
 
+
         // ============================
         // Kick OAuth Callback
         // ============================
@@ -911,6 +433,7 @@ class Bridge extends EventEmitter {
             "/kick/callback",
             KickCallback.callback
         );
+
 
         // ============================
         // HTTP + WebSocket Server
@@ -926,6 +449,7 @@ class Bridge extends EventEmitter {
                 server
             });
 
+
         server.listen(
             PORT,
             () => {
@@ -936,6 +460,7 @@ class Bridge extends EventEmitter {
 
             }
         );
+
 
         // ============================
         // WebSocket Connections
@@ -962,6 +487,7 @@ class Bridge extends EventEmitter {
                             "overlayId"
                         );
 
+
                     if (!overlayId) {
 
                         const match =
@@ -971,47 +497,26 @@ class Bridge extends EventEmitter {
 
                         if (match) {
 
-                            const identifier =
-                                match[1];
+                            const login =
+                                match[1]
+                                    .toLowerCase();
 
-                            // Prefer a permanent overlayId.
-                            const accounts =
-                                await Account.loadAll();
-
-                            const accountByOverlayId =
-                                accounts.find(
-                                    account =>
-                                        account.overlayId ===
-                                        identifier
+                            const account =
+                                await Account.loadByLogin(
+                                    login
                                 );
 
-                            if (
-                                accountByOverlayId
-                            ) {
+                            if (account) {
 
                                 overlayId =
-                                    accountByOverlayId.overlayId;
-
-                            } else {
-
-                                // Legacy login URL fallback.
-                                const account =
-                                    await Account.loadByLogin(
-                                        identifier.toLowerCase()
-                                    );
-
-                                if (account) {
-
-                                    overlayId =
-                                        account.overlayId;
-
-                                }
+                                    account.overlayId;
 
                             }
 
                         }
 
                     }
+
 
                     // Keep the existing root
                     // overlay working.
@@ -1022,14 +527,16 @@ class Bridge extends EventEmitter {
 
                     }
 
+
                     ws.overlayId =
                         overlayId;
 
+
                     console.log(
                         "🎯 Overlay ID:",
-                        overlayId ||
-                        "none"
+                        overlayId || "none"
                     );
+
 
                     if (overlayId) {
 
@@ -1043,8 +550,7 @@ class Bridge extends EventEmitter {
                             ws.send(
                                 JSON.stringify({
 
-                                    type:
-                                        "init",
+                                    type: "init",
 
                                     userId:
                                         broadcasterId,
@@ -1069,6 +575,7 @@ class Bridge extends EventEmitter {
 
             }
         );
+
 
         // ============================
         // Message Routing
@@ -1095,6 +602,7 @@ class Bridge extends EventEmitter {
 
                         }
 
+
                         // Only send the message
                         // to the overlay belonging
                         // to this account.
@@ -1108,6 +616,7 @@ class Bridge extends EventEmitter {
 
                         }
 
+
                         client.send(
                             payload
                         );
@@ -1118,6 +627,7 @@ class Bridge extends EventEmitter {
             }
         );
 
+
         // ============================
         // Load Default Account
         // ============================
@@ -1125,6 +635,7 @@ class Bridge extends EventEmitter {
         this.loadDefaultAccount();
 
     }
+
 
     async loadDefaultAccount() {
 
@@ -1158,6 +669,7 @@ class Bridge extends EventEmitter {
 
     }
 
+
     send(data) {
 
         this.emit(
@@ -1178,7 +690,8 @@ class Bridge extends EventEmitter {
                     data.username,
 
                 color:
-                    resolveChatColor(data),
+                    data.color ||
+                    "#ffffff",
 
                 text:
                     data.text,
@@ -1215,6 +728,7 @@ class Bridge extends EventEmitter {
 
     }
 
+
     setBroadcasterId(
         id,
         overlayId = null
@@ -1240,6 +754,7 @@ class Bridge extends EventEmitter {
 
         }
 
+
         this.send({
 
             type:
@@ -1255,6 +770,7 @@ class Bridge extends EventEmitter {
     }
 
 }
+
 
 // ============================
 // Database Connection
@@ -1291,6 +807,7 @@ class Bridge extends EventEmitter {
 
 })();
 
+
 // ============================
 // Bridge
 // ============================
@@ -1300,12 +817,14 @@ const bridge =
 
 bridge.loadDefaultAccount();
 
+
 // ============================
 // Export Bridge
 // ============================
 
 module.exports =
     bridge;
+
 
 // ============================
 // Load Platforms

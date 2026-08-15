@@ -97,14 +97,14 @@ export default function App() {
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-white outline-none focus:border-cyan-500"
                   >
                     <option value="Segoe UI">Segoe UI (Default)</option>
-<option value="Inter">Inter</option>
-<option value="Poppins">Poppins</option>
-<option value="Outfit">Outfit</option>
-<option value="Geist Sans">Geist Sans</option>
-<option value="Space Grotesk">Space Grotesk</option>
-<option value="JetBrains Mono">JetBrains Mono</option>
-<option value="Arial">Arial</option>
-<option value="Verdana">Verdana</option>
+                    <option value="Inter">Inter</option>
+                    <option value="Poppins">Poppins</option>
+                    <option value="Outfit">Outfit</option>
+                    <option value="Geist Sans">Geist Sans</option>
+                    <option value="Space Grotesk">Space Grotesk</option>
+                    <option value="JetBrains Mono">JetBrains Mono</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Verdana">Verdana</option>
                   </select>
                 </div>
               </div>
@@ -112,31 +112,31 @@ export default function App() {
 
             {/* Live Preview */}
             <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
-  <p className="mb-4 text-sm text-zinc-500">
-    Current Font: {fontFamily}
-  </p>
+              <p className="mb-4 text-sm text-zinc-500">
+                Current Font: {fontFamily}
+              </p>
 
- <div
-  style={{
-    fontFamily,
-    fontWeight: 800,
-  }}
->
-    <div className="mb-2">
-      <span className="font-bold text-cyan-400">
-        Streamer:
-      </span>{" "}
-      <span>Hello everyone 👋</span>
-    </div>
+              <div
+                style={{
+                  fontFamily,
+                  fontWeight: 800,
+                }}
+              >
+                <div className="mb-2">
+                  <span className="font-bold text-cyan-400">
+                    Streamer:
+                  </span>{" "}
+                  <span>Hello everyone 👋</span>
+                </div>
 
-    <div>
-      <span className="font-bold text-red-400">
-        AnotherUser:
-      </span>{" "}
-      <span>This overlay is sick!</span>
-    </div>
-  </div>
-</div>
+                <div>
+                  <span className="font-bold text-red-400">
+                    AnotherUser:
+                  </span>{" "}
+                  <span>This overlay is sick!</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>

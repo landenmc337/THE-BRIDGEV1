@@ -1,16 +1,27 @@
 const axios = require("axios");
 const Account = require("../data/account");
+const PlatformConnections = require("../data/platformConnections");
 const crypto = require("crypto");
 
 module.exports = async function TwitchCallback(req, res) {
 
-    console.log("Callback query:", req.query);
+    console.log(
+        "Callback query:",
+        req.query
+    );
 
-    const { code, error } = req.query;
+    const {
+        code,
+        error,
+        state
+    } = req.query;
 
     if (error) {
 
-        console.error("❌ Twitch OAuth Error:", error);
+        console.error(
+            "❌ Twitch OAuth Error:",
+            error
+        );
 
         return res.send(`
             <h2>The Bridge4K</h2>
@@ -20,17 +31,53 @@ module.exports = async function TwitchCallback(req, res) {
     }
 
     if (!code) {
-        return res.status(400).send("Missing authorization code.");
+
+        return res
+            .status(400)
+            .send(
+                "Missing authorization code."
+            );
+
+    }
+
+    if (!state) {
+
+        return res
+            .status(400)
+            .send(
+                "Missing OAuth state."
+            );
+
     }
 
     try {
 
-        const TwitchAuth = require("./twitch");
+        const TwitchAuth =
+            require("./twitch");
+
+        const stateData =
+            TwitchAuth.decodeState(
+                state
+            );
+
+        if (!stateData) {
+
+            return res
+                .status(400)
+                .send(
+                    "Invalid OAuth state."
+                );
+
+        }
 
         const tokens =
-            await TwitchAuth.exchangeCode(code);
+            await TwitchAuth.exchangeCode(
+                code
+            );
 
-        console.log("✅ Twitch OAuth successful.");
+        console.log(
+            "✅ Twitch OAuth successful."
+        );
 
         const userResponse =
             await axios.get(
@@ -50,41 +97,76 @@ module.exports = async function TwitchCallback(req, res) {
             userResponse.data.data[0];
 
         if (!user) {
+
             throw new Error(
                 "Twitch user could not be found."
             );
+
         }
 
         /*
-         * Keep the existing overlay ID
-         * if this account has already connected.
+         * ----------------------------------------------------
+         * Find an existing Bridge account if Twitch is being
+         * connected to an existing creator.
+         * ----------------------------------------------------
          */
-        const existingAccount =
+
+        let account = null;
+
+        if (stateData.login) {
+
+            account =
+                await Account.loadByLogin(
+                    stateData.login
+                );
+
+        }
+
+        /*
+         * ----------------------------------------------------
+         * If Twitch is the first platform, create a new
+         * Bridge account and overlay.
+         * ----------------------------------------------------
+         */
+
+        const existingTwitchAccount =
             await Account.loadByLogin(
                 user.login
             );
 
+        if (!account && existingTwitchAccount) {
+
+            account =
+                existingTwitchAccount;
+
+        }
+
         const overlayId =
-            existingAccount?.overlayId ||
+            account?.overlayId ||
+            existingTwitchAccount?.overlayId ||
             "ovl_" +
             crypto.randomBytes(8).toString("hex");
 
-        console.log(
-            "🎯 Overlay ID:",
-            overlayId
-        );
+        /*
+         * ----------------------------------------------------
+         * Save / update Bridge account.
+         * ----------------------------------------------------
+         */
 
         await Account.save({
 
             overlayId,
 
             displayName:
+                account?.displayName ||
                 user.display_name,
 
             login:
+                account?.login ||
                 user.login,
 
             userId:
+                account?.userId ||
                 user.id,
 
             accessToken:
@@ -98,11 +180,53 @@ module.exports = async function TwitchCallback(req, res) {
 
         });
 
-        console.log("💾 Account saved.");
+        console.log(
+            "💾 Bridge account saved."
+        );
 
         /*
-         * Auto-connect Twitch.
+         * ----------------------------------------------------
+         * Save Twitch as a platform connection.
+         * ----------------------------------------------------
          */
+
+        await PlatformConnections.save({
+
+            overlayId,
+
+            platform:
+                "twitch",
+
+            platformUserId:
+                String(user.id),
+
+            displayName:
+                user.display_name,
+
+            login:
+                user.login,
+
+            accessToken:
+                tokens.access_token,
+
+            refreshToken:
+                tokens.refresh_token,
+
+            connectedAt:
+                Date.now()
+
+        });
+
+        console.log(
+            "💾 Twitch connection saved."
+        );
+
+        /*
+         * ----------------------------------------------------
+         * Initialize Twitch platform.
+         * ----------------------------------------------------
+         */
+
         const TwitchPlatform =
             require("../platforms/twitch");
 
@@ -110,9 +234,8 @@ module.exports = async function TwitchCallback(req, res) {
 
         console.log("");
         console.log(
-            "🎉 Logged Into The Bridge4K"
+            "🎉 Twitch connected to The Bridge4K"
         );
-        console.log("--------------------------------");
         console.log(
             "Display Name:",
             user.display_name
@@ -122,23 +245,32 @@ module.exports = async function TwitchCallback(req, res) {
             user.login
         );
         console.log(
-            "User ID:",
-            user.id
-        );
-        console.log(
             "Overlay ID:",
             overlayId
         );
-        console.log("--------------------------------");
         console.log("");
 
         /*
-         * Send creator back to the
-         * dashboard after OAuth.
+         * ----------------------------------------------------
+         * Return to dashboard using the Bridge login.
+         * ----------------------------------------------------
          */
-        const dashboardUrl =
-            `${process.env.LANDING_URL || "http://localhost:3000"}/dashboard?login=${encodeURIComponent(user.login)}`;
 
+        const dashboardLogin =
+            account?.login ||
+            existingTwitchAccount?.login ||
+            user.login;
+
+        const dashboardUrl =
+    `${
+        process.env.LANDING_URL ||
+        "http://localhost:3000"
+    }/dashboard?login=${encodeURIComponent(
+        dashboardLogin
+    )}&overlayId=${encodeURIComponent(
+        overlayId
+    )}`;
+    
         return res.redirect(
             dashboardUrl
         );
@@ -150,17 +282,22 @@ module.exports = async function TwitchCallback(req, res) {
         );
 
         if (err.response) {
+
             console.error(
                 err.response.data
             );
+
         } else {
+
             console.error(err);
+
         }
 
-        res.status(500).send(
-            "OAuth failed."
-        );
+        return res
+            .status(500)
+            .send(
+                "OAuth failed."
+            );
 
     }
-
 };

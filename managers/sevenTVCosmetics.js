@@ -94,8 +94,10 @@ class SevenTVCosmetics {
         this.cache = new Map();
         this.pending = new Map();
 
-        // 0 minute cache
-        this.TTL = 1000 * 60 * 0;
+        // Cache successful and unsuccessful lookups for 10 minutes.
+        // This prevents repeated 7TV API requests for users
+        // who do not have a 7TV account.
+        this.TTL = 1000 * 30;
     }
 
     async get(twitchUserId) {
@@ -117,16 +119,19 @@ class SevenTVCosmetics {
 
         this.pending.set(twitchUserId, promise);
 
-        const result = await promise;
+        try {
+            const result = await promise;
 
-        this.pending.delete(twitchUserId);
+            this.cache.set(twitchUserId, {
+                expires: Date.now() + this.TTL,
+                data: result
+            });
 
-        this.cache.set(twitchUserId, {
-            expires: Date.now() + this.TTL,
-            data: result
-        });
+            return result;
 
-        return result;
+        } finally {
+            this.pending.delete(twitchUserId);
+        }
     }
 
     async fetchUser(twitchUserId) {
@@ -138,45 +143,61 @@ class SevenTVCosmetics {
 
             const payload = response.data;
             const user = payload.user ?? payload;
-            console.log("v3 User ID:", user.id);
-console.log("v3 Active Paint:", user.style?.active_paint_id ?? user.style?.activePaint);
 
             if (!user?.id) {
                 return this.empty();
             }
 
             // Get cosmetics from GraphQL
-const gql = await axios.post(
-    "https://api.7tv.app/v4/gql",
-    {
-        operationName: "OneUser",
-        query: ONE_USER_QUERY,
-        variables: {
-            id: user.id
-        }
-    }
-);
+            const gql = await axios.post(
+                "https://api.7tv.app/v4/gql",
+                {
+                    operationName: "OneUser",
+                    query: ONE_USER_QUERY,
+                    variables: {
+                        id: user.id
+                    }
+                }
+            );
 
-const gqlUser = gql.data.data.users.user;
+            const style =
+                gql.data?.data?.users?.user?.style;
 
-console.log("GraphQL Paint ID:", gqlUser.style.activePaint?.id);
-console.log("GraphQL Paint Name:", gqlUser.style.activePaint?.name);
-
-const style = gql.data?.data?.users?.user?.style;
-
-console.log(JSON.stringify(style?.activePaint, null, 2));
             return {
-                paintId: style?.activePaint?.id ?? null,
-                badgeId: style?.activeBadge?.id ?? null,
+                paintId:
+                    style?.activePaint?.id ?? null,
 
-                paint: style?.activePaint ?? null,
-                badge: style?.activeBadge ?? null,
+                badgeId:
+                    style?.activeBadge?.id ?? null,
+
+                paint:
+                    style?.activePaint ?? null,
+
+                badge:
+                    style?.activeBadge ?? null,
 
                 effects: [],
+
                 raw: style
             };
 
         } catch (err) {
+
+            const status =
+                err.response?.status;
+
+            const errorCode =
+                err.response?.data?.error_code;
+
+            // A Twitch user not having a 7TV account is normal.
+            // Return empty cosmetics without spamming the console.
+            if (
+                status === 404 ||
+                errorCode === 12000
+            ) {
+                return this.empty();
+            }
+
             console.error(
                 "7TV Cosmetics Error:",
                 err.response?.data || err.message

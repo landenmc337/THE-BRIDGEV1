@@ -4,13 +4,8 @@ const crypto = require("crypto");
 const { google } = require("googleapis");
 
 const REDIRECT_URI =
-    process.env.YOUTUBE_REDIRECT_URI;
-
-if (!REDIRECT_URI) {
-    throw new Error(
-        "YOUTUBE_REDIRECT_URI is not configured."
-    );
-}
+    process.env.YOUTUBE_REDIRECT_URI ||
+    "http://localhost:3847/youtube/callback";
 
 function createOAuthClient() {
 
@@ -45,10 +40,7 @@ function buildLoginURL() {
                 "offline",
 
             prompt:
-                "select_account consent",
-
-            include_granted_scopes:
-                true,
+                "consent",
 
             scope: [
                 "https://www.googleapis.com/auth/youtube.readonly"
