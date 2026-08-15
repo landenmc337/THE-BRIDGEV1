@@ -550,18 +550,18 @@ function registerEvents(
 
 
             // ========================================
-            // Hide commands
+            // Show / Hide commands
             // ========================================
 
             if (
-                config.filters.hideCommands &&
-                trimmedMessage.startsWith(
-                    config.filters.commandPrefix
+                await bridge.shouldHideCommand(
+                    account.overlayId,
+                    trimmedMessage
                 )
             ) {
 
                 console.log(
-                    "🚫 Hidden Command:",
+                    `🚫 [${account.login}] Hidden Command:`,
                     trimmedMessage
                 );
 
@@ -574,21 +574,22 @@ function registerEvents(
             // ========================================
 
             if (
-    await bridge.shouldHideUser(
-        account.overlayId,
-        username
-    )
-) {
+                await bridge.shouldHideUser(
+                    account.overlayId,
+                    username
+                )
+            ) {
 
-    console.log(
-        "🚫 Hidden Bot:",
-        username,
-        "for overlay:",
-        account.overlayId
-    );
+                console.log(
+                    "🚫 Hidden Bot:",
+                    username,
+                    "for overlay:",
+                    account.overlayId
+                );
 
-    return;
-}
+                return;
+            }
+
 
             const sevenTV =
                 await SevenTVCosmetics.get(

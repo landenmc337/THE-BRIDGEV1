@@ -1,25 +1,20 @@
 require("dotenv").config();
 
-const { Pool } =
-    require("pg");
+const { Pool } = require("pg");
 
-const pool =
-    new Pool({
+const pool = new Pool({
+    connectionString:
+        process.env.DATABASE_URL,
 
-        connectionString:
-            process.env.DATABASE_URL,
-
-        ssl:
-            process.env.DATABASE_URL?.includes(
-                "railway.app"
-            )
-                ? {
-                    rejectUnauthorized:
-                        false
-                }
-                : false
-
-    });
+    ssl:
+        process.env.DATABASE_URL?.includes(
+            "railway.app"
+        )
+            ? {
+                rejectUnauthorized: false
+            }
+            : false
+});
 
 
 // ============================================================
@@ -30,9 +25,9 @@ const pool =
 
     try {
 
-        // --------------------------------------------------------
-        // Accounts Table
-        // --------------------------------------------------------
+        // ========================================================
+        // Accounts
+        // ========================================================
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS accounts (
@@ -62,9 +57,9 @@ const pool =
         );
 
 
-        // --------------------------------------------------------
-        // Ensure overlay_id Is Unique
-        // --------------------------------------------------------
+        // ========================================================
+        // Unique Overlay IDs
+        // ========================================================
 
         await pool.query(`
             CREATE UNIQUE INDEX IF NOT EXISTS
@@ -78,9 +73,9 @@ const pool =
         );
 
 
-        // --------------------------------------------------------
+        // ========================================================
         // Platform Connections
-        // --------------------------------------------------------
+        // ========================================================
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS platform_connections (
@@ -125,16 +120,9 @@ const pool =
         );
 
 
-        // --------------------------------------------------------
+        // ========================================================
         // Overlay Settings
-        // --------------------------------------------------------
-        //
-        // One settings row per Bridge4K overlay.
-        //
-        // Empty hidden_bots means:
-        // SHOW ALL BOTS
-        //
-        // --------------------------------------------------------
+        // ========================================================
 
         await pool.query(`
             CREATE TABLE IF NOT EXISTS overlay_settings (
@@ -142,6 +130,8 @@ const pool =
                 overlay_id TEXT PRIMARY KEY,
 
                 hidden_bots TEXT NOT NULL DEFAULT '',
+
+                show_commands BOOLEAN NOT NULL DEFAULT FALSE,
 
                 FOREIGN KEY (
                     overlay_id
@@ -157,6 +147,27 @@ const pool =
 
         console.log(
             "✅ Overlay settings table ready."
+        );
+
+
+        // ========================================================
+        // Existing Database Upgrade
+        // ========================================================
+        //
+        // If overlay_settings already existed before
+        // show_commands was added, this safely adds the column.
+        //
+        // ========================================================
+
+        await pool.query(`
+            ALTER TABLE overlay_settings
+            ADD COLUMN IF NOT EXISTS
+            show_commands BOOLEAN NOT NULL DEFAULT FALSE;
+        `);
+
+
+        console.log(
+            "✅ Overlay settings columns ready."
         );
 
 

@@ -13,138 +13,220 @@ const Account = require("./data/account");
 const PlatformConnections = require("./data/platformConnections");
 const db = require("./database");
 
-function getFallbackChatColor(platform, username) {
-    const normalizedPlatform =
-        String(platform || "").toLowerCase();
 
-    const normalizedUsername =
-        String(username || "user");
+// ============================================================
+// Kick Emote Helpers
+// ============================================================
 
-    const palettes = {
-        kick: [
-            "#53FC18",
-            "#7CFF4F",
-            "#22C55E",
-            "#A3E635",
-            "#34D399",
-            "#84CC16"
-        ],
+function escapeHtml(value) {
 
-        youtube: [
-            "#FF4D4D",
-            "#FF6B6B",
-            "#F43F5E",
-            "#FB7185",
-            "#EF4444",
-            "#F97316"
-        ],
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 
-        default: [
-            "#A970FF",
-            "#53FC18",
-            "#FF4D4D",
-            "#00F2EA",
-            "#F59E0B",
-            "#38BDF8"
-        ]
-    };
-
-    const palette =
-        palettes[normalizedPlatform] ||
-        palettes.default;
-
-    let hash = 0;
-
-    for (let i = 0; i < normalizedUsername.length; i++) {
-        hash =
-            ((hash << 5) - hash) +
-            normalizedUsername.charCodeAt(i);
-
-        hash |= 0;
-    }
-
-    return palette[
-        Math.abs(hash) % palette.length
-    ];
 }
 
-function resolveChatColor(data) {
-    const providedColor =
-        typeof data?.color === "string"
-            ? data.color.trim()
-            : "";
 
-    if (providedColor) {
-        return providedColor;
+function buildKickEmoteHtml(
+    content,
+    emotes = []
+) {
+
+    if (
+        !content ||
+        !Array.isArray(emotes) ||
+        emotes.length === 0
+    ) {
+
+        return {
+            text: content || "",
+            emotes: {}
+        };
+
     }
 
-    return getFallbackChatColor(
-        data?.platform,
-        data?.username
-    );
-}
-
-function renderKickEmotes(text, emotes = []) {
-    if (!text || !Array.isArray(emotes) || emotes.length === 0) {
-        return text || "";
-    }
 
     const replacements = [];
 
+
     for (const emote of emotes) {
-        const id = emote?.emote_id;
 
-        const positions =
-            Array.isArray(emote?.positions)
-                ? emote.positions
-                : [];
+        const emoteId =
+            emote?.emote_id;
 
-        if (!id) continue;
+        if (!emoteId) continue;
 
-        for (const position of positions) {
+        if (!Array.isArray(emote.positions)) {
+            continue;
+        }
+
+
+        for (
+            const position of emote.positions
+        ) {
+
             const start =
                 Number(position?.s);
 
             const end =
                 Number(position?.e);
 
+
             if (
                 !Number.isInteger(start) ||
-                !Number.isInteger(end)
+                !Number.isInteger(end) ||
+                start < 0 ||
+                end < start ||
+                start >= content.length
             ) {
                 continue;
             }
 
+
             replacements.push({
+
                 start,
-                end,
-                id
+
+                end:
+                    Math.min(
+                        end,
+                        content.length - 1
+                    ),
+
+                emoteId:
+                    String(emoteId)
+
             });
+
         }
+
     }
+
+
+    if (!replacements.length) {
+
+        return {
+
+            text:
+                escapeHtml(content),
+
+            emotes: {}
+
+        };
+
+    }
+
 
     replacements.sort(
         (a, b) =>
-            b.start - a.start
+            a.start - b.start ||
+            b.end - a.end
     );
 
-    let html = text;
 
-    for (const emote of replacements) {
-        const url =
-            `https://files.kick.com/emotes/${emote.id}/fullsize`;
+    const valid = [];
 
-        const img =
-            `<img class="emote" src="${url}" alt="" loading="lazy" decoding="async" draggable="false">`;
+    let lastEnd = -1;
 
-        html =
-            html.slice(0, emote.start) +
-            img +
-            html.slice(emote.end + 1);
+
+    for (
+        const replacement of replacements
+    ) {
+
+        if (
+            replacement.start <=
+            lastEnd
+        ) {
+            continue;
+        }
+
+
+        valid.push(
+            replacement
+        );
+
+        lastEnd =
+            replacement.end;
+
     }
 
-    return html;
+
+    let result = "";
+
+    let cursor = 0;
+
+
+    for (
+        const replacement of valid
+    ) {
+
+        if (
+            replacement.start >
+            cursor
+        ) {
+
+            result +=
+                escapeHtml(
+                    content.slice(
+                        cursor,
+                        replacement.start
+                    )
+                );
+
+        }
+
+
+        const emoteUrl =
+            `https://files.kick.com/emotes/${encodeURIComponent(
+                replacement.emoteId
+            )}/fullsize`;
+
+
+        result +=
+            `<img class="emote kick-emote" ` +
+            `src="${emoteUrl}" ` +
+            `alt="" ` +
+            `loading="lazy" ` +
+            `decoding="async" ` +
+            `draggable="false">`;
+
+
+        cursor =
+            replacement.end + 1;
+
+    }
+
+
+    if (
+        cursor <
+        content.length
+    ) {
+
+        result +=
+            escapeHtml(
+                content.slice(cursor)
+            );
+
+    }
+
+
+    return {
+
+        text: result,
+
+        emotes: {}
+
+    };
+
 }
+
+
+// ============================================================
+// Bridge
+// ============================================================
 
 class Bridge extends EventEmitter {
 
@@ -152,7 +234,9 @@ class Bridge extends EventEmitter {
 
         super();
 
-        this.broadcasterId = null;
+
+        this.broadcasterId =
+            null;
 
         this.broadcasters =
             new Map();
@@ -160,37 +244,22 @@ class Bridge extends EventEmitter {
         this.defaultOverlayId =
             null;
 
+
         const PORT =
             process.env.PORT || 3000;
+
 
         this.app =
             express();
 
-        // ============================================================
-        // CORS
-        // ============================================================
 
         this.app.use(
             (req, res, next) => {
 
-                const allowedOrigins = [
-                    "http://localhost:3000",
-                    "https://www.thebridge4k.com"
-                ];
-
-                const origin =
-                    req.headers.origin;
-
-                if (
-                    allowedOrigins.includes(origin)
-                ) {
-
-                    res.header(
-                        "Access-Control-Allow-Origin",
-                        origin
-                    );
-
-                }
+                res.header(
+                    "Access-Control-Allow-Origin",
+                    "*"
+                );
 
                 res.header(
                     "Access-Control-Allow-Methods",
@@ -202,8 +271,10 @@ class Bridge extends EventEmitter {
                     "Content-Type"
                 );
 
+
                 if (
-                    req.method === "OPTIONS"
+                    req.method ===
+                    "OPTIONS"
                 ) {
 
                     return res.sendStatus(
@@ -212,21 +283,28 @@ class Bridge extends EventEmitter {
 
                 }
 
+
                 next();
 
             }
         );
 
+
         this.app.use(
-            express.static(
-                __dirname
-            )
+            express.json()
         );
+
+
+        this.app.use(
+            express.static(__dirname)
+        );
+
 
         console.log(
             "__dirname:",
             __dirname
         );
+
 
         this.app.use(
             (req, res, next) => {
@@ -241,9 +319,10 @@ class Bridge extends EventEmitter {
             }
         );
 
-        // ============================
+
+        // ========================================================
         // Test Route
-        // ============================
+        // ========================================================
 
         this.app.get(
             "/test",
@@ -255,224 +334,11 @@ class Bridge extends EventEmitter {
 
             }
         );
-// ============================
-// Overlay Settings
-// ============================
-
-this.app.get(
-    "/overlay/:identifier/settings",
-    async (req, res) => {
-
-        try {
-
-            const identifier =
-                String(
-                    req.params.identifier || ""
-                ).trim();
-
-            if (!identifier) {
-
-                return res
-                    .status(400)
-                    .json({
-                        error:
-                            "Missing overlay identifier."
-                    });
-
-            }
-
-            let account =
-                await Account.loadByOverlayId(
-                    identifier
-                );
-
-            if (!account) {
-
-                account =
-                    await Account.loadByLogin(
-                        identifier.toLowerCase()
-                    );
-
-            }
-
-            if (!account) {
-
-                return res
-                    .status(404)
-                    .json({
-                        error:
-                            "Overlay not found."
-                    });
-
-            }
-
-            const result =
-                await db.query(
-                    `
-                    SELECT hidden_bots
-                    FROM overlay_settings
-                    WHERE overlay_id = $1
-                    LIMIT 1
-                    `,
-                    [
-                        account.overlayId
-                    ]
-                );
-
-            const hiddenBots =
-                result.rows.length
-                    ? result.rows[0].hidden_bots || ""
-                    : "";
-
-            return res.json({
-                overlayId:
-                    account.overlayId,
-
-                hiddenBots
-            });
-
-        } catch (err) {
-
-            console.error(
-                "❌ Failed to load overlay settings:",
-                err
-            );
-
-            return res
-                .status(500)
-                .json({
-                    error:
-                        "Failed to load overlay settings."
-                });
-
-        }
-
-    }
-);
 
 
-this.app.post(
-    "/overlay/:identifier/settings",
-    express.json(),
-    async (req, res) => {
-
-        try {
-
-            const identifier =
-                String(
-                    req.params.identifier || ""
-                ).trim();
-
-            if (!identifier) {
-
-                return res
-                    .status(400)
-                    .json({
-                        error:
-                            "Missing overlay identifier."
-                    });
-
-            }
-
-            let account =
-                await Account.loadByOverlayId(
-                    identifier
-                );
-
-            if (!account) {
-
-                account =
-                    await Account.loadByLogin(
-                        identifier.toLowerCase()
-                    );
-
-            }
-
-            if (!account) {
-
-                return res
-                    .status(404)
-                    .json({
-                        error:
-                            "Overlay not found."
-                    });
-
-            }
-
-            const rawHiddenBots =
-                typeof req.body?.hiddenBots ===
-                "string"
-                    ? req.body.hiddenBots
-                    : "";
-
-            const hiddenBots =
-                rawHiddenBots
-                    .split(",")
-                    .map(
-                        bot =>
-                            bot
-                                .trim()
-                                .toLowerCase()
-                    )
-                    .filter(Boolean)
-                    .filter(
-                        (bot, index, list) =>
-                            list.indexOf(bot) ===
-                            index
-                    )
-                    .join(",");
-
-
-            await db.query(
-                `
-                INSERT INTO overlay_settings (
-                    overlay_id,
-                    hidden_bots
-                )
-                VALUES ($1, $2)
-                ON CONFLICT (overlay_id)
-                DO UPDATE SET
-                    hidden_bots = EXCLUDED.hidden_bots
-                `,
-                [
-                    account.overlayId,
-                    hiddenBots
-                ]
-            );
-
-
-            return res.json({
-
-                success: true,
-
-                overlayId:
-                    account.overlayId,
-
-                hiddenBots
-
-            });
-
-        } catch (err) {
-
-            console.error(
-                "❌ Failed to save overlay settings:",
-                err
-            );
-
-            return res
-                .status(500)
-                .json({
-                    error:
-                        "Failed to save overlay settings."
-                });
-
-        }
-
-    }
-);
-        // ============================
-        // Overlay
-        // ============================
+        // ========================================================
+        // Root Overlay
+        // ========================================================
 
         this.app.get(
             "/",
@@ -488,6 +354,11 @@ this.app.post(
             }
         );
 
+
+        // ========================================================
+        // Overlay
+        // ========================================================
+
         this.app.get(
             "/overlay/:identifier",
             async (req, res) => {
@@ -500,6 +371,7 @@ this.app.post(
                             ""
                         ).trim();
 
+
                     if (!identifier) {
 
                         return res
@@ -510,20 +382,13 @@ this.app.post(
 
                     }
 
-                    // New creator-specific URLs
-                    // use the permanent overlayId.
-                    let account =
-                        (
-                            await Account.loadAll()
-                        ).find(
-                            item =>
-                                item.overlayId ===
-                                identifier
-                        ) || null;
 
-                    // Keep existing
-                    // login-based URLs working
-                    // during the transition.
+                    let account =
+                        await Account.loadByOverlayId(
+                            identifier
+                        );
+
+
                     if (!account) {
 
                         account =
@@ -532,6 +397,7 @@ this.app.post(
                             );
 
                     }
+
 
                     if (!account) {
 
@@ -544,12 +410,14 @@ this.app.post(
 
                     }
 
+
                     res.sendFile(
                         path.join(
                             __dirname,
                             "overlay.html"
                         )
                     );
+
 
                 } catch (err) {
 
@@ -558,46 +426,291 @@ this.app.post(
                         err
                     );
 
-                    res.status(500).send(
-                        "Failed to load overlay."
-                    );
+
+                    res
+                        .status(500)
+                        .send(
+                            "Failed to load overlay."
+                        );
 
                 }
 
             }
         );
 
-        const fs =
-            require("fs");
+
+        // ========================================================
+        // Overlay Settings
+        // ========================================================
 
         this.app.get(
-            "/debug-overlay",
-            (req, res) => {
+            "/overlay/:identifier/settings",
+            async (req, res) => {
 
-                res.type(
-                    "text/plain"
-                );
+                try {
 
-                res.send(
-                    fs.readFileSync(
-                        path.join(
-                            __dirname,
-                            "overlay.html"
-                        ),
-                        "utf8"
-                    )
-                );
+                    const identifier =
+                        String(
+                            req.params.identifier ||
+                            ""
+                        ).trim();
+
+
+                    if (!identifier) {
+
+                        return res
+                            .status(400)
+                            .json({
+                                error:
+                                    "Missing overlay identifier."
+                            });
+
+                    }
+
+
+                    let account =
+                        await Account.loadByOverlayId(
+                            identifier
+                        );
+
+
+                    if (!account) {
+
+                        account =
+                            await Account.loadByLogin(
+                                identifier.toLowerCase()
+                            );
+
+                    }
+
+
+                    if (!account) {
+
+                        return res
+                            .status(404)
+                            .json({
+                                error:
+                                    "Overlay not found."
+                            });
+
+                    }
+
+
+                    const result =
+                        await db.query(
+                            `
+                            SELECT
+                                hidden_bots,
+                                show_commands
+                            FROM overlay_settings
+                            WHERE overlay_id = $1
+                            LIMIT 1
+                            `,
+                            [
+                                account.overlayId
+                            ]
+                        );
+
+
+                    const row =
+                        result.rows[0];
+
+
+                    return res.json({
+
+                        overlayId:
+                            account.overlayId,
+
+                        hiddenBots:
+                            row?.hidden_bots ||
+                            "",
+
+                        showCommands:
+                            row?.show_commands ===
+                            true
+
+                    });
+
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ Failed to load overlay settings:",
+                        err
+                    );
+
+
+                    return res
+                        .status(500)
+                        .json({
+                            error:
+                                "Failed to load overlay settings."
+                        });
+
+                }
 
             }
         );
 
-        // ============================
+
+        this.app.post(
+            "/overlay/:identifier/settings",
+            async (req, res) => {
+
+                try {
+
+                    const identifier =
+                        String(
+                            req.params.identifier ||
+                            ""
+                        ).trim();
+
+
+                    if (!identifier) {
+
+                        return res
+                            .status(400)
+                            .json({
+                                error:
+                                    "Missing overlay identifier."
+                            });
+
+                    }
+
+
+                    let account =
+                        await Account.loadByOverlayId(
+                            identifier
+                        );
+
+
+                    if (!account) {
+
+                        account =
+                            await Account.loadByLogin(
+                                identifier.toLowerCase()
+                            );
+
+                    }
+
+
+                    if (!account) {
+
+                        return res
+                            .status(404)
+                            .json({
+                                error:
+                                    "Overlay not found."
+                            });
+
+                    }
+
+
+                    const rawHiddenBots =
+                        typeof req.body?.hiddenBots ===
+                        "string"
+                            ? req.body.hiddenBots
+                            : "";
+
+
+                    const hiddenBots =
+                        rawHiddenBots
+                            .split(",")
+                            .map(
+                                bot =>
+                                    bot
+                                        .trim()
+                                        .toLowerCase()
+                            )
+                            .filter(Boolean)
+                            .filter(
+                                (
+                                    bot,
+                                    index,
+                                    list
+                                ) =>
+                                    list.indexOf(
+                                        bot
+                                    ) === index
+                            )
+                            .join(",");
+
+
+                    const showCommands =
+                        req.body?.showCommands ===
+                        true;
+
+
+                    await db.query(
+                        `
+                        INSERT INTO overlay_settings (
+                            overlay_id,
+                            hidden_bots,
+                            show_commands
+                        )
+                        VALUES (
+                            $1,
+                            $2,
+                            $3
+                        )
+                        ON CONFLICT (
+                            overlay_id
+                        )
+                        DO UPDATE SET
+                            hidden_bots =
+                                EXCLUDED.hidden_bots,
+                            show_commands =
+                                EXCLUDED.show_commands
+                        `,
+                        [
+                            account.overlayId,
+                            hiddenBots,
+                            showCommands
+                        ]
+                    );
+
+
+                    return res.json({
+
+                        success: true,
+
+                        overlayId:
+                            account.overlayId,
+
+                        hiddenBots,
+
+                        showCommands
+
+                    });
+
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ Failed to save overlay settings:",
+                        err
+                    );
+
+
+                    return res
+                        .status(500)
+                        .json({
+                            error:
+                                "Failed to save overlay settings."
+                        });
+
+                }
+
+            }
+        );
+
+
+        // ========================================================
         // Kick Webhook
-        // ============================
+        // ========================================================
 
         this.app.post(
             "/kick/webhook",
-            express.json(),
             async (req, res) => {
 
                 console.log(
@@ -609,10 +722,12 @@ this.app.post(
                     )
                 );
 
+
                 try {
 
                     const message =
                         req.body || {};
+
 
                     const broadcasterId =
                         message.broadcaster?.user_id ??
@@ -622,6 +737,7 @@ this.app.post(
                         message.channel?.id ??
                         null;
 
+
                     const broadcasterLogin =
                         message.broadcaster?.username ||
                         message.broadcaster?.login ||
@@ -629,8 +745,10 @@ this.app.post(
                         message.channel?.login ||
                         null;
 
+
                     let connection =
                         null;
+
 
                     if (
                         broadcasterId !==
@@ -647,6 +765,7 @@ this.app.post(
 
                     }
 
+
                     if (
                         !connection &&
                         broadcasterLogin
@@ -660,6 +779,7 @@ this.app.post(
 
                     }
 
+
                     if (!connection) {
 
                         console.warn(
@@ -670,11 +790,13 @@ this.app.post(
                             }
                         );
 
+
                         return res.sendStatus(
                             200
                         );
 
                     }
+
 
                     this.send({
 
@@ -693,12 +815,12 @@ this.app.post(
                             "Kick User",
 
                         text:
-                            renderKickEmotes(
+                            buildKickEmoteHtml(
                                 message.content ||
-                                "",
+                                    "",
                                 message.emotes ||
-                                []
-                            ),
+                                    []
+                            ).text,
 
                         userId:
                             message.sender?.user_id ||
@@ -714,9 +836,11 @@ this.app.post(
 
                     });
 
+
                     return res.sendStatus(
                         200
                     );
+
 
                 } catch (err) {
 
@@ -724,6 +848,7 @@ this.app.post(
                         "❌ Kick webhook routing failed:",
                         err
                     );
+
 
                     return res.sendStatus(
                         500
@@ -734,21 +859,18 @@ this.app.post(
             }
         );
 
-        // ============================
+
+        // ========================================================
         // Twitch Login
-        // ============================
+        // ========================================================
 
         this.app.get(
             "/auth/twitch",
             (req, res) => {
 
-                const login =
-                    req.query.login || null;
-
                 const result =
-                    TwitchAuth.buildLoginURL(
-                        login
-                    );
+                    TwitchAuth.buildLoginURL();
+
 
                 res.redirect(
                     result.url
@@ -757,118 +879,40 @@ this.app.post(
             }
         );
 
-        // ============================
+
+        // ========================================================
         // YouTube OAuth Callback
-        // ============================
+        // ========================================================
 
         this.app.get(
             "/youtube/callback",
             YouTubeCallback.callback
         );
 
-        // ============================
+
+        // ========================================================
         // YouTube Login
-        // ============================
+        // ========================================================
 
         this.app.get(
             "/youtube/login",
             YouTubeCallback.createLogin
         );
 
-        // ============================
+
+        // ========================================================
         // Twitch OAuth Callback
-        // ============================
+        // ========================================================
 
         this.app.get(
             "/auth/twitch/callback",
             TwitchCallback
         );
 
-        // ============================
-        // Account / Overlay Status
-        // ============================
 
-        this.app.get(
-            "/account/status",
-            async (req, res) => {
-
-                try {
-
-                    const login =
-                        String(
-                            req.query.login ||
-                            ""
-                        ).trim();
-
-                    if (!login) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                found: false,
-                                error:
-                                    "Missing login."
-                            });
-
-                    }
-
-                    const account =
-                        await Account.loadByLogin(
-                            login.toLowerCase()
-                        );
-
-                    if (!account) {
-
-                        return res
-                            .status(404)
-                            .json({
-                                found: false,
-                                error:
-                                    "Account not found."
-                            });
-
-                    }
-
-                    return res.json({
-
-                        found:
-                            true,
-
-                        overlayId:
-                            account.overlayId,
-
-                        login:
-                            account.login,
-
-                        displayName:
-                            account.displayName ||
-                            null
-
-                    });
-
-                } catch (err) {
-
-                    console.error(
-                        "❌ Failed to load account status:",
-                        err
-                    );
-
-                    return res
-                        .status(500)
-                        .json({
-                            found: false,
-                            error:
-                                "Failed to load account status."
-                        });
-
-                }
-
-            }
-        );
-
-        // ============================
+        // ========================================================
         // Kick Connection Status
-        // ============================
+        // ========================================================
 
         this.app.get(
             "/kick/status",
@@ -879,42 +923,47 @@ this.app.post(
                     const login =
                         req.query.login;
 
+
                     if (!login) {
 
                         return res
                             .status(400)
                             .json({
-                                connected: false,
+                                connected:
+                                    false,
                                 error:
                                     "Missing login."
                             });
 
                     }
 
+
                     const account =
                         await Account.loadByLogin(
                             login
                         );
+
 
                     if (!account) {
 
                         return res
                             .status(404)
                             .json({
-                                connected: false,
+                                connected:
+                                    false,
                                 error:
                                     "Account not found."
                             });
 
                     }
 
+
                     const connection =
-                        await require(
-                            "./data/platformConnections"
-                        ).load(
+                        await PlatformConnections.load(
                             account.overlayId,
                             "kick"
                         );
+
 
                     return res.json({
 
@@ -931,6 +980,7 @@ this.app.post(
 
                     });
 
+
                 } catch (err) {
 
                     console.error(
@@ -938,10 +988,12 @@ this.app.post(
                         err
                     );
 
+
                     return res
                         .status(500)
                         .json({
-                            connected: false,
+                            connected:
+                                false,
                             error:
                                 "Failed to check Kick status."
                         });
@@ -951,194 +1003,42 @@ this.app.post(
             }
         );
 
-        // ============================
-        // Platform Connection Status
-        // ============================
 
-        this.app.get(
-            "/platform/status",
-            async (req, res) => {
-
-                try {
-
-                    const login =
-                        String(
-                            req.query.login || ""
-                        )
-                            .trim()
-                            .toLowerCase();
-
-                    const platform =
-                        String(
-                            req.query.platform || ""
-                        )
-                            .trim()
-                            .toLowerCase();
-
-                    if (!login) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                connected: false,
-                                error:
-                                    "Missing login."
-                            });
-
-                    }
-
-                    if (
-                        ![
-                            "twitch",
-                            "kick",
-                            "youtube"
-                        ].includes(platform)
-                    ) {
-
-                        return res
-                            .status(400)
-                            .json({
-                                connected: false,
-                                error:
-                                    "Invalid platform."
-                            });
-
-                    }
-
-                    let connection = null;
-
-                    // ====================================================
-                    // First: Find the Bridge account
-                    // ====================================================
-
-                    const account =
-                        await Account.loadByLogin(
-                            login
-                        );
-
-                    // ====================================================
-                    // Second: Try the account's overlay ID
-                    // ====================================================
-
-                    if (
-                        account &&
-                        account.overlayId
-                    ) {
-
-                        connection =
-                            await PlatformConnections.load(
-                                account.overlayId,
-                                platform
-                            );
-
-                    }
-
-                    // ====================================================
-                    // Third: If not found, try the platform login
-                    // ====================================================
-
-                    if (!connection) {
-
-                        connection =
-                            await PlatformConnections.loadByPlatformLogin(
-                                platform,
-                                login
-                            );
-
-                    }
-
-                    // ====================================================
-                    // Return status
-                    // ====================================================
-
-                    if (!connection) {
-
-                        return res.json({
-
-                            connected: false,
-
-                            platform,
-
-                            displayName:
-                                null,
-
-                            login:
-                                null
-
-                        });
-
-                    }
-
-                    return res.json({
-
-                        connected: true,
-
-                        platform,
-
-                        displayName:
-                            connection.displayName ||
-                            null,
-
-                        login:
-                            connection.login ||
-                            null
-
-                    });
-
-                } catch (err) {
-
-                    console.error(
-                        "❌ Failed to check platform status:",
-                        err
-                    );
-
-                    return res
-                        .status(500)
-                        .json({
-
-                            connected: false,
-
-                            error:
-                                "Failed to check platform status."
-
-                        });
-
-                }
-
-            }
-        );
-
-        // ============================
+        // ========================================================
         // Kick Login
-        // ============================
+        // ========================================================
 
         this.app.get(
             "/kick/login",
             KickCallback.createLogin
         );
 
-        // ============================
+
+        // ========================================================
         // Kick OAuth Callback
-        // ============================
+        // ========================================================
 
         this.app.get(
             "/kick/callback",
             KickCallback.callback
         );
 
-        // ============================
+
+        // ========================================================
         // HTTP + WebSocket Server
-        // ============================
+        // ========================================================
 
         const server =
             http.createServer(
                 this.app
             );
 
+
         this.wss =
             new WebSocket.Server({
                 server
             });
+
 
         server.listen(
             PORT,
@@ -1151,9 +1051,10 @@ this.app.post(
             }
         );
 
-        // ============================
+
+        // ========================================================
         // WebSocket Connections
-        // ============================
+        // ========================================================
 
         this.wss.on(
             "connection",
@@ -1163,6 +1064,7 @@ this.app.post(
                     "🖥 Overlay Connected"
                 );
 
+
                 try {
 
                     const url =
@@ -1171,10 +1073,12 @@ this.app.post(
                             `http://${req.headers.host || "localhost"}`
                         );
 
+
                     let overlayId =
                         url.searchParams.get(
                             "overlayId"
                         );
+
 
                     if (!overlayId) {
 
@@ -1183,43 +1087,24 @@ this.app.post(
                                 /^\/overlay\/([^/]+)$/
                             );
 
+
                         if (match) {
 
-                            const identifier =
-                                match[1];
+                            const login =
+                                match[1]
+                                    .toLowerCase();
 
-                            // Prefer a permanent overlayId.
-                            const accounts =
-                                await Account.loadAll();
 
-                            const accountByOverlayId =
-                                accounts.find(
-                                    account =>
-                                        account.overlayId ===
-                                        identifier
+                            const account =
+                                await Account.loadByLogin(
+                                    login
                                 );
 
-                            if (
-                                accountByOverlayId
-                            ) {
+
+                            if (account) {
 
                                 overlayId =
-                                    accountByOverlayId.overlayId;
-
-                            } else {
-
-                                // Legacy login URL fallback.
-                                const account =
-                                    await Account.loadByLogin(
-                                        identifier.toLowerCase()
-                                    );
-
-                                if (account) {
-
-                                    overlayId =
-                                        account.overlayId;
-
-                                }
+                                    account.overlayId;
 
                             }
 
@@ -1227,8 +1112,7 @@ this.app.post(
 
                     }
 
-                    // Keep the existing root
-                    // overlay working.
+
                     if (!overlayId) {
 
                         overlayId =
@@ -1236,14 +1120,17 @@ this.app.post(
 
                     }
 
+
                     ws.overlayId =
                         overlayId;
+
 
                     console.log(
                         "🎯 Overlay ID:",
                         overlayId ||
-                        "none"
+                            "none"
                     );
+
 
                     if (overlayId) {
 
@@ -1251,6 +1138,7 @@ this.app.post(
                             this.broadcasters.get(
                                 overlayId
                             );
+
 
                         if (broadcasterId) {
 
@@ -1272,6 +1160,7 @@ this.app.post(
 
                     }
 
+
                 } catch (err) {
 
                     console.error(
@@ -1284,9 +1173,10 @@ this.app.post(
             }
         );
 
-        // ============================
+
+        // ========================================================
         // Message Routing
-        // ============================
+        // ========================================================
 
         this.on(
             "message",
@@ -1296,6 +1186,7 @@ this.app.post(
                     JSON.stringify(
                         data
                     );
+
 
                 this.wss.clients.forEach(
                     (client) => {
@@ -1309,9 +1200,7 @@ this.app.post(
 
                         }
 
-                        // Only send the message
-                        // to the overlay belonging
-                        // to this account.
+
                         if (
                             data.overlayId &&
                             client.overlayId !==
@@ -1321,6 +1210,7 @@ this.app.post(
                             return;
 
                         }
+
 
                         client.send(
                             payload
@@ -1332,13 +1222,182 @@ this.app.post(
             }
         );
 
-        // ============================
+
+        // ========================================================
         // Load Default Account
-        // ============================
+        // ========================================================
 
         this.loadDefaultAccount();
 
     }
+
+
+    // ============================================================
+    // Hidden Bot Check
+    // ============================================================
+
+    async shouldHideUser(
+        overlayId,
+        username
+    ) {
+
+        if (
+            !overlayId ||
+            !username
+        ) {
+
+            return false;
+
+        }
+
+
+        try {
+
+            const result =
+                await db.query(
+                    `
+                    SELECT hidden_bots
+                    FROM overlay_settings
+                    WHERE overlay_id = $1
+                    LIMIT 1
+                    `,
+                    [
+                        overlayId
+                    ]
+                );
+
+
+            if (
+                result.rows.length ===
+                0
+            ) {
+
+                return false;
+
+            }
+
+
+            const hiddenBots =
+                String(
+                    result.rows[0].hidden_bots ||
+                    ""
+                )
+                    .split(",")
+                    .map(
+                        bot =>
+                            bot
+                                .trim()
+                                .toLowerCase()
+                    )
+                    .filter(Boolean);
+
+
+            return hiddenBots.includes(
+                String(
+                    username
+                )
+                    .trim()
+                    .toLowerCase()
+            );
+
+
+        } catch (err) {
+
+            console.error(
+                "❌ Failed to check hidden bot:",
+                err
+            );
+
+
+            return false;
+
+        }
+
+    }
+
+
+    // ============================================================
+    // ! Command Check
+    // ============================================================
+
+    async shouldHideCommand(
+        overlayId,
+        text
+    ) {
+
+        if (!text) {
+
+            return false;
+
+        }
+
+
+        const message =
+            String(text).trim();
+
+
+        if (
+            !message.startsWith("!")
+        ) {
+
+            return false;
+
+        }
+
+
+        if (!overlayId) {
+
+            return true;
+
+        }
+
+
+        try {
+
+            const result =
+                await db.query(
+                    `
+                    SELECT show_commands
+                    FROM overlay_settings
+                    WHERE overlay_id = $1
+                    LIMIT 1
+                    `,
+                    [
+                        overlayId
+                    ]
+                );
+
+
+            const showCommands =
+                result.rows.length > 0 &&
+                result.rows[0]
+                    .show_commands === true;
+
+
+            return !showCommands;
+
+
+        } catch (err) {
+
+            console.error(
+                "❌ Failed to check command setting:",
+                err
+            );
+
+
+            // Fail closed.
+            // Commands stay hidden if the
+            // setting cannot be read.
+            return true;
+
+        }
+
+    }
+
+
+    // ============================================================
+    // Load Default Account
+    // ============================================================
 
     async loadDefaultAccount() {
 
@@ -1347,6 +1406,7 @@ this.app.post(
             const accounts =
                 await Account.loadAll();
 
+
             if (
                 accounts.length > 0
             ) {
@@ -1354,12 +1414,14 @@ this.app.post(
                 this.defaultOverlayId =
                     accounts[0].overlayId;
 
+
                 console.log(
                     "🎯 Default overlay:",
                     this.defaultOverlayId
                 );
 
             }
+
 
         } catch (err) {
 
@@ -1371,73 +1433,12 @@ this.app.post(
         }
 
     }
-    
-async shouldHideUser(
-    overlayId,
-    username
-) {
 
-    if (
-        !overlayId ||
-        !username
-    ) {
-        return false;
-    }
 
-    try {
+    // ============================================================
+    // Send Message
+    // ============================================================
 
-        const result =
-            await db.query(
-                `
-                SELECT hidden_bots
-                FROM overlay_settings
-                WHERE overlay_id = $1
-                LIMIT 1
-                `,
-                [
-                    overlayId
-                ]
-            );
-
-        if (
-            result.rows.length === 0
-        ) {
-            return false;
-        }
-
-        const hiddenBots =
-            String(
-                result.rows[0].hidden_bots ||
-                ""
-            )
-                .split(",")
-                .map(
-                    bot =>
-                        bot.trim().toLowerCase()
-                )
-                .filter(Boolean);
-
-        return hiddenBots.includes(
-            String(
-                username
-            ).trim().toLowerCase()
-        );
-
-    } catch (err) {
-
-        console.error(
-            "❌ Failed to check hidden bot:",
-            err
-        );
-
-        // Fail open.
-        // If settings cannot be read,
-        // do not hide the message.
-        return false;
-
-    }
-
-}
     send(data) {
 
         this.emit(
@@ -1458,7 +1459,8 @@ async shouldHideUser(
                     data.username,
 
                 color:
-                    resolveChatColor(data),
+                    data.color ||
+                    "#ffffff",
 
                 text:
                     data.text,
@@ -1495,6 +1497,11 @@ async shouldHideUser(
 
     }
 
+
+    // ============================================================
+    // Broadcaster Mapping
+    // ============================================================
+
     setBroadcasterId(
         id,
         overlayId = null
@@ -1507,18 +1514,19 @@ async shouldHideUser(
                 id
             );
 
+
             console.log(
                 `📺 Broadcaster mapped: ${overlayId} → ${id}`
             );
 
+
         } else {
 
-            // Legacy fallback for
-            // the current account.
             this.broadcasterId =
                 id;
 
         }
+
 
         this.send({
 
@@ -1536,9 +1544,10 @@ async shouldHideUser(
 
 }
 
-// ============================
+
+// ============================================================
 // Database Connection
-// ============================
+// ============================================================
 
 (async () => {
 
@@ -1549,19 +1558,23 @@ async shouldHideUser(
                 "SELECT NOW()"
             );
 
+
         console.log(
             "✅ Connected to Postgres!"
         );
 
+
         console.log(
             result.rows[0]
         );
+
 
     } catch (err) {
 
         console.error(
             "❌ Postgres connection failed:"
         );
+
 
         console.error(
             err
@@ -1571,29 +1584,34 @@ async shouldHideUser(
 
 })();
 
-// ============================
+
+// ============================================================
 // Bridge
-// ============================
+// ============================================================
 
 const bridge =
     new Bridge();
 
+
 bridge.loadDefaultAccount();
 
-// ============================
+
+// ============================================================
 // Export Bridge
-// ============================
+// ============================================================
 
 module.exports =
     bridge;
 
-// ============================
+
+// ============================================================
 // Load Platforms
-// ============================
+// ============================================================
 
 require(
     "./platforms/twitch"
 );
+
 
 require(
     "./platforms/youtube"
