@@ -138,7 +138,7 @@ function setSessionCookie(
             `${COOKIE_NAME}=${token}`,
             "HttpOnly",
             "Secure",
-            "SameSite=Lax",
+            "SameSite=None",
             "Path=/",
             "Max-Age=604800"
         ].join("; ")
@@ -152,7 +152,7 @@ function clearSessionCookie(res) {
             `${COOKIE_NAME}=`,
             "HttpOnly",
             "Secure",
-            "SameSite=Lax",
+            "SameSite=None",
             "Path=/",
             "Max-Age=0"
         ].join("; ")
