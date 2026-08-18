@@ -761,35 +761,51 @@ async function getKickPublicKey() {
 
 
     const response =
-        await fetch(
-            "https://api.kick.com/public/v1/public-key"
-        );
+    await fetch(
+        "https://api.kick.com/public/v1/public-key"
+    );
 
 
-    if (!response.ok) {
+if (!response.ok) {
 
-        throw new Error(
-            `Failed to fetch Kick public key: ${response.status}`
-        );
+    const errorText =
+        await response.text();
 
-    }
+    throw new Error(
+        `Failed to fetch Kick public key: ${response.status} ${errorText}`
+    );
 
-
-    const data =
-        await response.json();
-
-
-    if (!data.publicKey) {
-
-        throw new Error(
-            "Kick public key was not returned."
-        );
-
-    }
+}
 
 
-    kickPublicKey =
-        data.publicKey;
+const data =
+    await response.json();
+
+
+console.log(
+    "🔑 Kick public key response:",
+    data
+);
+
+
+const publicKey =
+    data.public_key ||
+    data.publicKey ||
+    data.data?.public_key ||
+    data.data?.publicKey;
+
+
+if (!publicKey) {
+
+    throw new Error(
+        "Kick public key was not returned."
+    );
+
+}
+
+
+kickPublicKey =
+    publicKey;
 
     kickPublicKeyLoadedAt =
         now;
