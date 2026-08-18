@@ -3,6 +3,7 @@ const path = require("path");
 const EventEmitter = require("events");
 const WebSocket = require("ws");
 const http = require("http");
+const crypto = require("crypto");
 
 const TwitchAuth = require("./auth/twitch");
 
@@ -143,7 +144,11 @@ class Bridge extends EventEmitter {
 
 
 this.app.use(
-    express.json()
+    express.json({
+        verify: (req, res, buf) => {
+            req.rawBody = buf;
+        }
+    })
 );
 
         // ============================================================
@@ -723,139 +728,479 @@ this.app.use(
         );
 
         // ============================================================
-        // Kick Webhook
-        // ============================================================
+// Kick Webhook
+// ============================================================
 
-        this.app.post(
-            "/kick/webhook",
-            async (req, res) => {
+let kickPublicKey = null;
 
-                console.log(
-                    "📨 Kick Webhook:",
-                    JSON.stringify(
-                        req.body,
-                        null,
-                        2
-                    )
+let kickPublicKeyLoadedAt = 0;
+
+const KICK_PUBLIC_KEY_CACHE_TIME =
+    60 * 60 * 1000;
+
+const processedKickMessages =
+    new Map();
+
+
+// ============================================================
+// Get Kick Public Key
+// ============================================================
+
+async function getKickPublicKey() {
+
+    const now =
+        Date.now();
+
+    if (
+        kickPublicKey &&
+        now - kickPublicKeyLoadedAt <
+            KICK_PUBLIC_KEY_CACHE_TIME
+    ) {
+        return kickPublicKey;
+    }
+
+
+    const response =
+        await fetch(
+            "https://api.kick.com/public/v1/public-key"
+        );
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            `Failed to fetch Kick public key: ${response.status}`
+        );
+
+    }
+
+
+    const data =
+        await response.json();
+
+
+    if (!data.publicKey) {
+
+        throw new Error(
+            "Kick public key was not returned."
+        );
+
+    }
+
+
+    kickPublicKey =
+        data.publicKey;
+
+    kickPublicKeyLoadedAt =
+        now;
+
+
+    return kickPublicKey;
+
+}
+
+
+// ============================================================
+// Verify Kick Webhook Signature
+// ============================================================
+
+async function verifyKickWebhook(
+    req
+) {
+
+    const messageId =
+        req.headers[
+            "kick-event-message-id"
+        ];
+
+    const timestamp =
+        req.headers[
+            "kick-event-message-timestamp"
+        ];
+
+    const signature =
+        req.headers[
+            "kick-event-signature"
+        ];
+
+
+    if (
+        !messageId ||
+        !timestamp ||
+        !signature
+    ) {
+
+        console.warn(
+            "⚠️ Kick webhook rejected: missing signature headers."
+        );
+
+        return false;
+
+    }
+
+
+    if (!req.rawBody) {
+
+        console.warn(
+            "⚠️ Kick webhook rejected: raw body unavailable."
+        );
+
+        return false;
+
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * Prevent replay attacks using the webhook timestamp.
+     * --------------------------------------------------------
+     */
+
+    const timestampMs =
+        Date.parse(
+            timestamp
+        );
+
+
+    if (
+        !Number.isFinite(
+            timestampMs
+        )
+    ) {
+
+        console.warn(
+            "⚠️ Kick webhook rejected: invalid timestamp."
+        );
+
+        return false;
+
+    }
+
+
+    const age =
+        Math.abs(
+            Date.now() -
+            timestampMs
+        );
+
+
+    const MAX_WEBHOOK_AGE =
+        5 * 60 * 1000;
+
+
+    if (
+        age >
+        MAX_WEBHOOK_AGE
+    ) {
+
+        console.warn(
+            "⚠️ Kick webhook rejected: timestamp too old."
+        );
+
+        return false;
+
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * Prevent duplicate delivery of the same event.
+     * --------------------------------------------------------
+     */
+
+    if (
+        processedKickMessages.has(
+            messageId
+        )
+    ) {
+
+        console.warn(
+            "⚠️ Duplicate Kick webhook ignored:",
+            messageId
+        );
+
+        return false;
+
+    }
+
+
+    const publicKey =
+        await getKickPublicKey();
+
+
+    /*
+     * --------------------------------------------------------
+     * Kick signs:
+     *
+     * messageId.timestamp.rawBody
+     * --------------------------------------------------------
+     */
+
+    const signedPayload =
+        Buffer.concat([
+
+            Buffer.from(
+                `${messageId}.${timestamp}.`,
+                "utf8"
+            ),
+
+            req.rawBody
+
+        ]);
+
+
+    const verifier =
+        crypto.createVerify(
+            "RSA-SHA256"
+        );
+
+
+    verifier.update(
+        signedPayload
+    );
+
+
+    verifier.end();
+
+
+    const signatureBuffer =
+        Buffer.from(
+            signature,
+            "base64"
+        );
+
+
+    const valid =
+        verifier.verify(
+            publicKey,
+            signatureBuffer
+        );
+
+
+    if (!valid) {
+
+        console.warn(
+            "⚠️ Kick webhook rejected: invalid signature."
+        );
+
+        return false;
+
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * Signature is valid. Remember the message ID so the
+     * same webhook cannot be processed twice.
+     * --------------------------------------------------------
+     */
+
+    processedKickMessages.set(
+        messageId,
+        Date.now()
+    );
+
+
+    /*
+     * Keep memory bounded.
+     */
+
+    if (
+        processedKickMessages.size >
+        10000
+    ) {
+
+        const oldest =
+            processedKickMessages
+                .entries()
+                .next()
+                .value;
+
+        if (oldest) {
+
+            processedKickMessages.delete(
+                oldest[0]
+            );
+
+        }
+
+    }
+
+
+    return true;
+
+}
+
+
+// ============================================================
+// Kick Webhook Endpoint
+// ============================================================
+
+this.app.post(
+    "/kick/webhook",
+    async (req, res) => {
+
+        try {
+
+            const valid =
+                await verifyKickWebhook(
+                    req
                 );
 
-                try {
 
-                    const message =
-                        req.body || {};
+            if (!valid) {
 
-                    const broadcasterId =
-                        message.broadcaster?.user_id ??
-                        message.broadcaster?.id ??
-                        message.broadcaster_id ??
-                        message.channel?.user_id ??
-                        message.channel?.id ??
-                        null;
-
-                    const broadcasterLogin =
-                        message.broadcaster?.username ||
-                        message.broadcaster?.login ||
-                        message.channel?.username ||
-                        message.channel?.login ||
-                        null;
-
-                    let connection =
-                        null;
-
-                    if (
-                        broadcasterId !== null
-                    ) {
-
-                        connection =
-                            await PlatformConnections.loadByPlatformUserId(
-                                "kick",
-                                String(
-                                    broadcasterId
-                                )
-                            );
-                    }
-
-                    if (
-                        !connection &&
-                        broadcasterLogin
-                    ) {
-
-                        connection =
-                            await PlatformConnections.loadByPlatformLogin(
-                                "kick",
-                                broadcasterLogin
-                            );
-                    }
-
-                    if (!connection) {
-
-                        console.warn(
-                            "⚠️ Kick webhook could not resolve an account:",
-                            {
-                                broadcasterId,
-                                broadcasterLogin
-                            }
-                        );
-
-                        return res.sendStatus(
-                            200
-                        );
-                    }
-
-                    this.send({
-
-                        type:
-                            "message",
-
-                        platform:
-                            "kick",
-
-                        overlayId:
-                            connection.overlayId,
-
-                        username:
-                            message.sender?.username ||
-                            message.sender?.name ||
-                            "Kick User",
-
-                        text:
-                            renderKickEmotes(
-                                message.content ||
-                                    "",
-                                message.emotes ||
-                                    []
-                            ),
-
-                        userId:
-                            message.sender?.user_id ||
-                            message.sender?.id ||
-                            "",
-
-                        badges: {},
-
-                        emotes: {},
-
-                        timestamp:
-                            Date.now()
-                    });
-
-                    return res.sendStatus(
-                        200
+                return res
+                    .status(403)
+                    .send(
+                        "Forbidden"
                     );
 
-                } catch (err) {
-
-                    console.error(
-                        "❌ Kick webhook routing failed:",
-                        err
-                    );
-
-                    return res.sendStatus(
-                        500
-                    );
-                }
             }
-        );
+
+
+            console.log(
+                "📨 Verified Kick Webhook:",
+                req.headers[
+                    "kick-event-type"
+                ]
+            );
+
+
+            const message =
+                req.body || {};
+
+
+            const broadcasterId =
+                message.broadcaster?.user_id ??
+                message.broadcaster?.id ??
+                message.broadcaster_id ??
+                message.channel?.user_id ??
+                message.channel?.id ??
+                null;
+
+
+            const broadcasterLogin =
+                message.broadcaster?.username ||
+                message.broadcaster?.login ||
+                message.channel?.username ||
+                message.channel?.login ||
+                null;
+
+
+            let connection =
+                null;
+
+
+            if (
+                broadcasterId !== null
+            ) {
+
+                connection =
+                    await PlatformConnections
+                        .loadByPlatformUserId(
+                            "kick",
+                            String(
+                                broadcasterId
+                            )
+                        );
+
+            }
+
+
+            if (
+                !connection &&
+                broadcasterLogin
+            ) {
+
+                connection =
+                    await PlatformConnections
+                        .loadByPlatformLogin(
+                            "kick",
+                            broadcasterLogin
+                        );
+
+            }
+
+
+            if (!connection) {
+
+                console.warn(
+                    "⚠️ Kick webhook could not resolve an account:",
+                    {
+                        broadcasterId,
+                        broadcasterLogin
+                    }
+                );
+
+
+                return res.sendStatus(
+                    200
+                );
+
+            }
+
+
+            this.send({
+
+                type:
+                    "message",
+
+                platform:
+                    "kick",
+
+                overlayId:
+                    connection.overlayId,
+
+                username:
+                    message.sender?.username ||
+                    message.sender?.name ||
+                    "Kick User",
+
+                text:
+                    renderKickEmotes(
+                        message.content ||
+                            "",
+                        message.emotes ||
+                            []
+                    ),
+
+                userId:
+                    message.sender?.user_id ||
+                    message.sender?.id ||
+                    "",
+
+                badges: {},
+
+                emotes: {},
+
+                timestamp:
+                    Date.now()
+
+            });
+
+
+            return res.sendStatus(
+                200
+            );
+
+
+        } catch (err) {
+
+            console.error(
+                "❌ Kick webhook verification/routing failed:",
+                err
+            );
+
+
+            return res.sendStatus(
+                500
+            );
+
+        }
+
+    }
+);
 
         // ============================================================
         // Twitch Login
