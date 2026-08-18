@@ -425,15 +425,10 @@ this.app.use(
                     }
 
                     return res.json({
-                        found: true,
-                        overlayId:
-                            account.overlayId,
-                        login:
-                            account.login,
-                        displayName:
-                            account.displayName ||
-                            null
-                    });
+    found: true,
+    overlayId:
+        account.overlayId
+});
 
                 } catch (err) {
 
@@ -1419,17 +1414,9 @@ this.app.post(
 
                     return res.json({
 
-                        connected:
-                            !!connection,
-
-                        displayName:
-                            connection?.displayName ||
-                            null,
-
-                        login:
-                            connection?.login ||
-                            null
-                    });
+    connected:
+        !!connection
+});
 
                 } catch (err) {
 
@@ -1542,18 +1529,10 @@ this.app.post(
 
                     return res.json({
 
-                        connected: true,
+    connected: true,
 
-                        platform,
-
-                        displayName:
-                            connection.displayName ||
-                            null,
-
-                        login:
-                            connection.login ||
-                            null
-                    });
+    platform
+});
 
                 } catch (err) {
 
