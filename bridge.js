@@ -128,9 +128,53 @@ class Bridge extends EventEmitter {
             express.json()
         );
 
-        this.app.use(
-            express.static(__dirname)
+        // ============================================================
+// PUBLIC STATIC FILES
+// ============================================================
+// Do NOT expose the entire project directory.
+// Only serve frontend files that need to be public.
+// ============================================================
+
+const publicFiles = [
+    "index.html",
+    "overlay.html",
+    "main.js",
+    "settings.js",
+    "style.css"
+];
+
+for (const file of publicFiles) {
+    this.app.get(`/${file}`, (req, res) => {
+        res.sendFile(
+            path.join(__dirname, file)
         );
+    });
+}
+
+// Only expose frontend asset directories.
+this.app.use(
+    "/managers",
+    express.static(
+        path.join(__dirname, "managers"),
+        { dotfiles: "deny" }
+    )
+);
+
+this.app.use(
+    "/renderer",
+    express.static(
+        path.join(__dirname, "renderer"),
+        { dotfiles: "deny" }
+    )
+);
+
+this.app.use(
+    "/assets",
+    express.static(
+        path.join(__dirname, "assets"),
+        { dotfiles: "deny" }
+    )
+);
 
         console.log(
             "__dirname:",
