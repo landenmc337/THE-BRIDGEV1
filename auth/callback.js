@@ -3,6 +3,10 @@ const Account = require("../data/account");
 const PlatformConnections = require("../data/platformConnections");
 const crypto = require("crypto");
 
+const {
+    setSessionCookie
+} = require("./session");
+
 module.exports = async function TwitchCallback(req, res) {
 
     console.log(
@@ -261,16 +265,32 @@ module.exports = async function TwitchCallback(req, res) {
             existingTwitchAccount?.login ||
             user.login;
 
+        /*
+         * ----------------------------------------------------
+         * Create secure Bridge session.
+         * ----------------------------------------------------
+         */
+
+        setSessionCookie(
+            res,
+            {
+                login:
+                    dashboardLogin,
+
+                overlayId
+            }
+        );
+
         const dashboardUrl =
-    `${
-        process.env.LANDING_URL ||
-        "http://localhost:3000"
-    }/dashboard?login=${encodeURIComponent(
-        dashboardLogin
-    )}&overlayId=${encodeURIComponent(
-        overlayId
-    )}`;
-    
+            `${
+                process.env.LANDING_URL ||
+                "http://localhost:3000"
+            }/dashboard?login=${encodeURIComponent(
+                dashboardLogin
+            )}&overlayId=${encodeURIComponent(
+                overlayId
+            )}`;
+
         return res.redirect(
             dashboardUrl
         );

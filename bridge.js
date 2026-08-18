@@ -5,12 +5,23 @@ const WebSocket = require("ws");
 const http = require("http");
 
 const TwitchAuth = require("./auth/twitch");
+
 const TwitchCallback = require("./auth/callback");
+
+const {
+    getSessionFromRequest
+} = require("./auth/session");
+
 const KickCallback = require("./auth/kickCallback");
+
 const YouTubeAuth = require("./auth/youtube");
+
 const YouTubeCallback = require("./auth/youtubeCallback");
+
 const Account = require("./data/account");
+
 const PlatformConnections = require("./data/platformConnections");
+
 const db = require("./database");
 
 function renderKickEmotes(text, emotes = []) {
@@ -85,48 +96,55 @@ class Bridge extends EventEmitter {
 
         this.app.use((req, res, next) => {
 
-            const allowedOrigins = [
-                "https://www.thebridge4k.com",
-                "https://thebridge4k.com",
-                "http://localhost:3000",
-                "http://127.0.0.1:3000"
-            ];
+    const allowedOrigins = [
+        "https://www.thebridge4k.com",
+        "https://thebridge4k.com",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ];
 
-            const origin =
-                req.headers.origin;
+    const origin =
+        req.headers.origin;
 
-            if (allowedOrigins.includes(origin)) {
-                res.header(
-                    "Access-Control-Allow-Origin",
-                    origin
-                );
+    if (allowedOrigins.includes(origin)) {
 
-                res.header(
-                    "Vary",
-                    "Origin"
-                );
-            }
-
-            res.header(
-                "Access-Control-Allow-Methods",
-                "GET,POST,OPTIONS"
-            );
-
-            res.header(
-                "Access-Control-Allow-Headers",
-                "Content-Type"
-            );
-
-            if (req.method === "OPTIONS") {
-                return res.sendStatus(204);
-            }
-
-            next();
-        });
-
-        this.app.use(
-            express.json()
+        res.header(
+            "Access-Control-Allow-Origin",
+            origin
         );
+
+        res.header(
+            "Access-Control-Allow-Credentials",
+            "true"
+        );
+
+        res.header(
+            "Vary",
+            "Origin"
+        );
+    }
+
+    res.header(
+        "Access-Control-Allow-Methods",
+        "GET,POST,OPTIONS"
+    );
+
+    res.header(
+        "Access-Control-Allow-Headers",
+        "Content-Type"
+    );
+
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+    }
+
+    next();
+});
+
+
+this.app.use(
+    express.json()
+);
 
         // ============================================================
 // PUBLIC STATIC FILES
@@ -371,218 +389,312 @@ this.app.use(
         // ============================================================
 
         this.app.get(
-            "/overlay/:identifier/settings",
-            async (req, res) => {
+    "/overlay/:identifier/settings",
+    async (req, res) => {
 
-                try {
+        try {
 
-                    const identifier =
-                        String(
-                            req.params.identifier || ""
-                        ).trim();
+            const session =
+                getSessionFromRequest(req);
 
-                    if (!identifier) {
+            if (!session) {
 
-                        return res
-                            .status(400)
-                            .json({
-                                error:
-                                    "Missing overlay identifier."
-                            });
-                    }
-
-                    let account =
-                        await Account.loadByOverlayId(
-                            identifier
-                        );
-
-                    if (!account) {
-
-                        account =
-                            await Account.loadByLogin(
-                                identifier.toLowerCase()
-                            );
-                    }
-
-                    if (!account) {
-
-                        return res
-                            .status(404)
-                            .json({
-                                error:
-                                    "Overlay not found."
-                            });
-                    }
-
-                    const result =
-                        await db.query(
-                            `
-                            SELECT
-                                hidden_bots,
-                                show_commands
-                            FROM overlay_settings
-                            WHERE overlay_id = $1
-                            LIMIT 1
-                            `,
-                            [
-                                account.overlayId
-                            ]
-                        );
-
-                    const row =
-                        result.rows[0];
-
-                    return res.json({
-
-                        overlayId:
-                            account.overlayId,
-
-                        hiddenBots:
-                            row?.hidden_bots ||
-                            "",
-
-                        showCommands:
-                            row?.show_commands === true
+                return res
+                    .status(401)
+                    .json({
+                        error:
+                            "Authentication required."
                     });
 
-                } catch (err) {
+            }
 
-                    console.error(
-                        "❌ Failed to load overlay settings:",
-                        err
+            const identifier =
+                String(
+                    req.params.identifier || ""
+                ).trim();
+
+            if (!identifier) {
+
+                return res
+                    .status(400)
+                    .json({
+                        error:
+                            "Missing overlay identifier."
+                    });
+
+            }
+
+            let account =
+                await Account.loadByOverlayId(
+                    identifier
+                );
+
+            if (!account) {
+
+                account =
+                    await Account.loadByLogin(
+                        identifier.toLowerCase()
                     );
 
-                    return res
-                        .status(500)
-                        .json({
-                            error:
-                                "Failed to load overlay settings."
-                        });
-                }
             }
-        );
+
+            if (!account) {
+
+                return res
+                    .status(404)
+                    .json({
+                        error:
+                            "Overlay not found."
+                    });
+
+            }
+
+            /*
+             * ----------------------------------------------------
+             * Verify that the authenticated session belongs
+             * to the requested Bridge account.
+             * ----------------------------------------------------
+             */
+
+            if (
+                session.overlayId !==
+                account.overlayId
+            ) {
+
+                console.warn(
+                    "⚠️ Unauthorized overlay settings read:",
+                    {
+                        requestedOverlay:
+                            account.overlayId,
+
+                        sessionOverlay:
+                            session.overlayId
+                    }
+                );
+
+                return res
+                    .status(403)
+                    .json({
+                        error:
+                            "You are not authorized to view this overlay's settings."
+                    });
+
+            }
+
+            const result =
+                await db.query(
+                    `
+                    SELECT
+                        hidden_bots,
+                        show_commands
+                    FROM overlay_settings
+                    WHERE overlay_id = $1
+                    LIMIT 1
+                    `,
+                    [
+                        account.overlayId
+                    ]
+                );
+
+            const row =
+                result.rows[0];
+
+            return res.json({
+
+                overlayId:
+                    account.overlayId,
+
+                hiddenBots:
+                    row?.hidden_bots ||
+                    "",
+
+                showCommands:
+                    row?.show_commands === true
+
+            });
+
+        } catch (err) {
+
+            console.error(
+                "❌ Failed to load overlay settings:",
+                err
+            );
+
+            return res
+                .status(500)
+                .json({
+                    error:
+                        "Failed to load overlay settings."
+                });
+
+        }
+
+    }
+);
 
         // ============================================================
         // Overlay Settings POST
         // ============================================================
 
         this.app.post(
-            "/overlay/:identifier/settings",
-            async (req, res) => {
+    "/overlay/:identifier/settings",
+    async (req, res) => {
 
-                try {
+        try {
 
-                    const identifier =
-                        String(
-                            req.params.identifier || ""
-                        ).trim();
+            const session =
+                getSessionFromRequest(req);
 
-                    let account =
-                        await Account.loadByOverlayId(
-                            identifier
-                        );
+            if (!session) {
 
-                    if (!account) {
-
-                        account =
-                            await Account.loadByLogin(
-                                identifier.toLowerCase()
-                            );
-                    }
-
-                    if (!account) {
-
-                        return res
-                            .status(404)
-                            .json({
-                                error:
-                                    "Overlay not found."
-                            });
-                    }
-
-                    const rawHiddenBots =
-                        typeof req.body?.hiddenBots ===
-                        "string"
-                            ? req.body.hiddenBots
-                            : "";
-
-                    const hiddenBots =
-                        rawHiddenBots
-                            .split(",")
-                            .map(
-                                bot =>
-                                    bot
-                                        .trim()
-                                        .toLowerCase()
-                            )
-                            .filter(Boolean)
-                            .filter(
-                                (
-                                    bot,
-                                    index,
-                                    list
-                                ) =>
-                                    list.indexOf(bot) ===
-                                    index
-                            )
-                            .join(",");
-
-                    const showCommands =
-                        req.body?.showCommands ===
-                        true;
-
-                    await db.query(
-                        `
-                        INSERT INTO overlay_settings (
-                            overlay_id,
-                            hidden_bots,
-                            show_commands
-                        )
-                        VALUES (
-                            $1,
-                            $2,
-                            $3
-                        )
-                        ON CONFLICT (
-                            overlay_id
-                        )
-                        DO UPDATE SET
-                            hidden_bots =
-                                EXCLUDED.hidden_bots,
-                            show_commands =
-                                EXCLUDED.show_commands
-                        `,
-                        [
-                            account.overlayId,
-                            hiddenBots,
-                            showCommands
-                        ]
-                    );
-
-                    return res.json({
-                        success: true,
-                        overlayId:
-                            account.overlayId,
-                        hiddenBots,
-                        showCommands
+                return res
+                    .status(401)
+                    .json({
+                        error:
+                            "Authentication required."
                     });
 
-                } catch (err) {
+            }
 
-                    console.error(
-                        "❌ Failed to save overlay settings:",
-                        err
+            const identifier =
+                String(
+                    req.params.identifier || ""
+                ).trim();
+
+            let account =
+                await Account.loadByOverlayId(
+                    identifier
+                );
+
+            if (!account) {
+
+                account =
+                    await Account.loadByLogin(
+                        identifier.toLowerCase()
                     );
 
-                    return res
-                        .status(500)
-                        .json({
-                            error:
-                                "Failed to save overlay settings."
-                        });
-                }
             }
-        );
+
+            if (!account) {
+
+                return res
+                    .status(404)
+                    .json({
+                        error:
+                            "Overlay not found."
+                    });
+
+            }
+
+            if (
+                session.overlayId !==
+                account.overlayId
+            ) {
+
+                console.warn(
+                    "⚠️ Unauthorized overlay settings attempt:",
+                    {
+                        requestedOverlay:
+                            account.overlayId,
+
+                        sessionOverlay:
+                            session.overlayId
+                    }
+                );
+
+                return res
+                    .status(403)
+                    .json({
+                        error:
+                            "You are not authorized to modify this overlay."
+                    });
+
+            }
+
+            const rawHiddenBots =
+                typeof req.body?.hiddenBots ===
+                "string"
+                    ? req.body.hiddenBots
+                    : "";
+
+            const hiddenBots =
+                rawHiddenBots
+                    .split(",")
+                    .map(
+                        bot =>
+                            bot
+                                .trim()
+                                .toLowerCase()
+                    )
+                    .filter(Boolean)
+                    .filter(
+                        (
+                            bot,
+                            index,
+                            list
+                        ) =>
+                            list.indexOf(bot) ===
+                            index
+                    )
+                    .join(",");
+
+            const showCommands =
+                req.body?.showCommands === true;
+
+            await db.query(
+                `
+                INSERT INTO overlay_settings (
+                    overlay_id,
+                    hidden_bots,
+                    show_commands
+                )
+                VALUES (
+                    $1,
+                    $2,
+                    $3
+                )
+                ON CONFLICT (
+                    overlay_id
+                )
+                DO UPDATE SET
+                    hidden_bots =
+                        EXCLUDED.hidden_bots,
+                    show_commands =
+                        EXCLUDED.show_commands
+                `,
+                [
+                    account.overlayId,
+                    hiddenBots,
+                    showCommands
+                ]
+            );
+
+            return res.json({
+                success: true,
+                overlayId:
+                    account.overlayId,
+                hiddenBots,
+                showCommands
+            });
+
+        } catch (err) {
+
+            console.error(
+                "❌ Failed to save overlay settings:",
+                err
+            );
+
+            return res
+                .status(500)
+                .json({
+                    error:
+                        "Failed to save overlay settings."
+                });
+
+        }
+
+    }
+);
 
         // ============================================================
         // Debug Overlay
@@ -750,40 +862,84 @@ this.app.use(
         // ============================================================
 
         this.app.get(
-            "/auth/twitch",
-            (req, res) => {
+    "/auth/twitch",
+    (req, res) => {
 
-                try {
+        try {
 
-                    const login =
-                        String(
-                            req.query.login || ""
-                        ).trim();
+            const requestedLogin =
+                String(
+                    req.query.login || ""
+                )
+                    .trim()
+                    .toLowerCase();
 
-                    const result =
-                        TwitchAuth.buildLoginURL(
-                            login || null
+            const session =
+                getSessionFromRequest(
+                    req
+                );
+
+            if (requestedLogin) {
+
+                if (!session) {
+
+                    return res
+                        .status(401)
+                        .send(
+                            "You must be logged in to connect Twitch to an existing Bridge account."
                         );
 
-                    return res.redirect(
-                        result.url
-                    );
+                }
 
-                } catch (err) {
+                if (
+                    session.login !==
+                    requestedLogin
+                ) {
 
-                    console.error(
-                        "❌ Twitch login failed:",
-                        err
+                    console.warn(
+                        "⚠️ Twitch account-link attempt rejected:",
+                        {
+                            requestedLogin,
+                            sessionLogin:
+                                session.login
+                        }
                     );
 
                     return res
-                        .status(500)
+                        .status(403)
                         .send(
-                            "Twitch login failed."
+                            "You are not authorized to connect Twitch to this Bridge account."
                         );
+
                 }
+
             }
-        );
+
+            const result =
+                TwitchAuth.buildLoginURL(
+                    requestedLogin || null
+                );
+
+            return res.redirect(
+                result.url
+            );
+
+        } catch (err) {
+
+            console.error(
+                "❌ Twitch login failed:",
+                err
+            );
+
+            return res
+                .status(500)
+                .send(
+                    "Twitch login failed."
+                );
+
+        }
+    }
+);
 
         // ============================================================
         // Twitch OAuth Callback
