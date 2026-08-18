@@ -783,8 +783,7 @@ const data =
 
 
 console.log(
-    "🔑 Kick public key response:",
-    data
+    "🔑 Kick public key loaded successfully."
 );
 
 
