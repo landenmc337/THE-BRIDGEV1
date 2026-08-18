@@ -4,6 +4,8 @@ const EventEmitter = require("events");
 const WebSocket = require("ws");
 const http = require("http");
 const crypto = require("crypto");
+const rateLimit =
+    require("express-rate-limit");
 
 const TwitchAuth = require("./auth/twitch");
 
@@ -90,7 +92,25 @@ class Bridge extends EventEmitter {
             process.env.PORT || 3000;
 
         this.app = express();
+const oauthLimiter =
+    rateLimit({
+        windowMs:
+            10 * 60 * 1000,
 
+        max:
+            20,
+
+        standardHeaders:
+            true,
+
+        legacyHeaders:
+            false,
+
+        message: {
+            error:
+                "Too many OAuth attempts. Please try again later."
+        }
+    });
         // ============================================================
         // CORS
         // ============================================================
@@ -1223,6 +1243,7 @@ this.app.post(
 
         this.app.get(
     "/auth/twitch",
+    oauthLimiter,
     (req, res) => {
 
         try {
@@ -1306,18 +1327,19 @@ this.app.post(
         // ============================================================
 
         this.app.get(
-            "/auth/twitch/callback",
-            TwitchCallback
-        );
-
+    "/auth/twitch/callback",
+    oauthLimiter,
+    TwitchCallback
+);
         // ============================================================
         // YouTube Login
         // ============================================================
 
         this.app.get(
-            "/youtube/login",
-            YouTubeCallback.createLogin
-        );
+    "/youtube/login",
+    oauthLimiter,
+    YouTubeCallback.createLogin
+);
 
         // ============================================================
         // YouTube OAuth Callback
@@ -1325,6 +1347,7 @@ this.app.post(
 
         this.app.get(
     "/auth/youtube/callback",
+    oauthLimiter,
     YouTubeCallback.callback
 );
 
@@ -1537,19 +1560,20 @@ this.app.post(
         // ============================================================
 
         this.app.get(
-            "/kick/login",
-            KickCallback.createLogin
-        );
+    "/kick/login",
+    oauthLimiter,
+    KickCallback.createLogin
+);
 
         // ============================================================
         // Kick Callback
         // ============================================================
 
         this.app.get(
-            "/kick/callback",
-            KickCallback.callback
-        );
-
+    "/kick/callback",
+    oauthLimiter,
+    KickCallback.callback
+);
         // ============================================================
         // HTTP + WebSocket Server
         // ============================================================
