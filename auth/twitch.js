@@ -16,7 +16,10 @@ function createState(login = null) {
             crypto.randomBytes(32).toString("hex"),
 
         login:
-            login || null
+            login || null,
+
+        createdAt:
+            Date.now()
 
     };
 
@@ -146,20 +149,50 @@ function decodeState(state) {
 
     try {
 
-        return JSON.parse(
-            Buffer
-                .from(
-                    data,
-                    "base64url"
-                )
-                .toString("utf8")
-        );
+        const stateData =
+            JSON.parse(
+                Buffer
+                    .from(
+                        data,
+                        "base64url"
+                    )
+                    .toString("utf8")
+            );
+
+
+        const createdAt =
+            Number(
+                stateData.createdAt
+            );
+
+
+        const TEN_MINUTES =
+            10 * 60 * 1000;
+
+
+        if (
+            !Number.isFinite(createdAt) ||
+            Date.now() - createdAt > TEN_MINUTES ||
+            Date.now() - createdAt < 0
+        ) {
+
+            console.warn(
+                "⚠️ Twitch OAuth state expired."
+            );
+
+            return null;
+        }
+
+
+        return stateData;
+
 
     } catch {
 
         return null;
 
     }
+
 }
 
 
