@@ -12,6 +12,7 @@ function createCodeVerifier() {
     return crypto
         .randomBytes(32)
         .toString("base64url");
+
 }
 
 
@@ -23,18 +24,176 @@ function createCodeChallenge(
         .createHash("sha256")
         .update(codeVerifier)
         .digest("base64url");
+
 }
 
 
 // ============================================================
-// OAuth State
+// Signed OAuth State
 // ============================================================
 
-function createState() {
+function createState(
+    login = null
+) {
 
-    return crypto
-        .randomBytes(32)
-        .toString("hex");
+    const payload = {
+
+        nonce:
+            crypto.randomBytes(32).toString("hex"),
+
+        login:
+            login || null,
+
+        createdAt:
+            Date.now()
+
+    };
+
+
+    const data =
+        Buffer
+            .from(
+                JSON.stringify(payload)
+            )
+            .toString("base64url");
+
+
+    const signature =
+        crypto
+            .createHmac(
+                "sha256",
+                process.env.KICK_CLIENT_SECRET
+            )
+            .update(data)
+            .digest("base64url");
+
+
+    return `${data}.${signature}`;
+
+}
+
+
+// ============================================================
+// Decode + Verify OAuth State
+// ============================================================
+
+function decodeState(
+    state
+) {
+
+    if (!state) {
+        return null;
+    }
+
+
+    const parts =
+        state.split(".");
+
+
+    if (parts.length !== 2) {
+        return null;
+    }
+
+
+    const [
+        data,
+        signature
+    ] = parts;
+
+
+    const expectedSignature =
+        crypto
+            .createHmac(
+                "sha256",
+                process.env.KICK_CLIENT_SECRET
+            )
+            .update(data)
+            .digest("base64url");
+
+
+    if (
+        signature.length !==
+        expectedSignature.length
+    ) {
+        return null;
+    }
+
+
+    let signaturesMatch;
+
+
+    try {
+
+        signaturesMatch =
+            crypto.timingSafeEqual(
+                Buffer.from(signature),
+                Buffer.from(
+                    expectedSignature
+                )
+            );
+
+    } catch {
+
+        return null;
+
+    }
+
+
+    if (!signaturesMatch) {
+        return null;
+    }
+
+
+    try {
+
+        const stateData =
+            JSON.parse(
+                Buffer
+                    .from(
+                        data,
+                        "base64url"
+                    )
+                    .toString("utf8")
+            );
+
+
+        const createdAt =
+            Number(
+                stateData.createdAt
+            );
+
+
+        const TEN_MINUTES =
+            10 * 60 * 1000;
+
+
+        if (
+            !Number.isFinite(
+                createdAt
+            ) ||
+            Date.now() - createdAt >
+                TEN_MINUTES ||
+            Date.now() - createdAt < 0
+        ) {
+
+            console.warn(
+                "⚠️ Kick OAuth state expired."
+            );
+
+            return null;
+
+        }
+
+
+        return stateData;
+
+
+    } catch {
+
+        return null;
+
+    }
+
 }
 
 
@@ -42,21 +201,29 @@ function createState() {
 // Build Kick Login URL
 // ============================================================
 
-function buildLoginURL() {
+function buildLoginURL(
+    login = null
+) {
 
     const state =
-        createState();
+        createState(
+            login
+        );
+
 
     const codeVerifier =
         createCodeVerifier();
+
 
     const codeChallenge =
         createCodeChallenge(
             codeVerifier
         );
 
+
     const params =
         new URLSearchParams({
+
             client_id:
                 process.env.KICK_CLIENT_ID,
 
@@ -76,9 +243,12 @@ function buildLoginURL() {
 
             code_challenge_method:
                 "S256"
+
         });
 
+
     return {
+
         state,
 
         codeVerifier,
@@ -86,7 +256,9 @@ function buildLoginURL() {
         url:
             "https://id.kick.com/oauth/authorize?" +
             params.toString()
+
     };
+
 }
 
 
@@ -112,6 +284,7 @@ async function exchangeCode(
 
                 body:
                     new URLSearchParams({
+
                         grant_type:
                             "authorization_code",
 
@@ -128,25 +301,41 @@ async function exchangeCode(
 
                         code_verifier:
                             codeVerifier
+
                     })
+
             }
         );
+
 
     if (!response.ok) {
 
         const errorText =
             await response.text();
 
+
         throw new Error(
             `Kick token exchange failed: ${response.status} ${errorText}`
         );
+
     }
 
+
     return response.json();
+
 }
 
 
+// ============================================================
+// Exports
+// ============================================================
+
 module.exports = {
+
     buildLoginURL,
+
+    decodeState,
+
     exchangeCode
+
 };
