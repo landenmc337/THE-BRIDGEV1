@@ -964,9 +964,9 @@ this.app.use(
         // ============================================================
 
         this.app.get(
-            "/youtube/callback",
-            YouTubeCallback.callback
-        );
+    "/auth/youtube/callback",
+    YouTubeCallback.callback
+);
 
         // ============================================================
         // Kick Status
