@@ -1,26 +1,43 @@
-const Account = require("../data/account");
-const PlatformConnections = require("../data/platformConnections");
-const YouTubeAuth = require("./youtube");
-const crypto = require("crypto");
+const Account =
+    require("../data/account");
+
+const PlatformConnections =
+    require("../data/platformConnections");
+
+const YouTubeAuth =
+    require("./youtube");
+
+const crypto =
+    require("crypto");
+
+const {
+    getSessionFromRequest,
+    setSessionCookie
+} = require("./session");
 
 
 // ============================================================
 // Temporary OAuth State Storage
 // ============================================================
 
-const pendingStates = new Map();
+const pendingStates =
+    new Map();
 
 
 // ============================================================
 // Store Pending YouTube OAuth State
 // ============================================================
 
-function storeState(state, data) {
+function storeState(
+    state,
+    data
+) {
 
     pendingStates.set(
         state,
         {
             ...data,
+
             createdAt:
                 Date.now()
         }
@@ -33,11 +50,37 @@ function storeState(state, data) {
 // Get Pending YouTube OAuth State
 // ============================================================
 
-function getState(state) {
+function getState(
+    state
+) {
 
-    return pendingStates.get(
-        state
-    );
+    const pending =
+        pendingStates.get(
+            state
+        );
+
+    if (!pending) {
+        return null;
+    }
+
+    const stateAge =
+        Date.now() -
+        pending.createdAt;
+
+    if (
+        stateAge >
+        10 * 60 * 1000
+    ) {
+
+        pendingStates.delete(
+            state
+        );
+
+        return null;
+
+    }
+
+    return pending;
 
 }
 
@@ -46,23 +89,100 @@ function getState(state) {
 // Create YouTube Login
 // ============================================================
 
-async function createLogin(req, res) {
+async function createLogin(
+    req,
+    res
+) {
 
     try {
 
-        const login =
-            req.query.login ||
-            null;
+        const requestedLogin =
+            String(
+                req.query.login || ""
+            )
+                .trim()
+                .toLowerCase();
 
+
+        const session =
+            getSessionFromRequest(
+                req
+            );
+
+
+        /*
+         * ----------------------------------------------------
+         * Existing Bridge account linking requires an
+         * authenticated session belonging to that account.
+         * ----------------------------------------------------
+         */
+
+        if (requestedLogin) {
+
+            if (!session) {
+
+                return res
+                    .status(401)
+                    .send(
+                        "You must be logged in to connect YouTube to an existing Bridge account."
+                    );
+
+            }
+
+
+            if (
+                session.login !==
+                requestedLogin
+            ) {
+
+                console.warn(
+                    "⚠️ Unauthorized YouTube account-link attempt:",
+                    {
+                        requestedLogin,
+
+                        sessionLogin:
+                            session.login
+                    }
+                );
+
+
+                return res
+                    .status(403)
+                    .send(
+                        "You are not authorized to connect YouTube to this Bridge account."
+                    );
+
+            }
+
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * Build signed YouTube OAuth URL.
+         * ----------------------------------------------------
+         */
 
         const result =
-            YouTubeAuth.buildLoginURL();
+            YouTubeAuth.buildLoginURL(
+                requestedLogin ||
+                null
+            );
 
+
+        /*
+         * ----------------------------------------------------
+         * Store temporary state as an additional one-time
+         * server-side protection.
+         * ----------------------------------------------------
+         */
 
         storeState(
             result.state,
             {
-                login
+                login:
+                    requestedLogin ||
+                    null
             }
         );
 
@@ -72,11 +192,11 @@ async function createLogin(req, res) {
         );
 
 
-        if (login) {
+        if (requestedLogin) {
 
             console.log(
                 "🎯 Existing Bridge login:",
-                login
+                requestedLogin
             );
 
         } else {
@@ -119,7 +239,10 @@ async function createLogin(req, res) {
 // YouTube OAuth Callback
 // ============================================================
 
-async function callback(req, res) {
+async function callback(
+    req,
+    res
+) {
 
     console.log(
         "YouTube callback query:",
@@ -184,11 +307,17 @@ async function callback(req, res) {
     }
 
 
-    const pending =
-        getState(state);
+    // --------------------------------------------------------
+    // Decode + verify signed state
+    // --------------------------------------------------------
+
+    const stateData =
+        YouTubeAuth.decodeState(
+            state
+        );
 
 
-    if (!pending) {
+    if (!stateData) {
 
         return res
             .status(400)
@@ -199,32 +328,133 @@ async function callback(req, res) {
     }
 
 
-    // Remove state immediately so it
-    // cannot be reused.
+    // --------------------------------------------------------
+    // Verify temporary server-side state
+    // --------------------------------------------------------
+
+    const pending =
+        getState(
+            state
+        );
+
+
+    if (!pending) {
+
+        return res
+            .status(400)
+            .send(
+                "Invalid or expired OAuth session."
+            );
+
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * Remove state immediately so it cannot be reused.
+     * --------------------------------------------------------
+     */
+
     pendingStates.delete(
         state
     );
 
 
-    // --------------------------------------------------------
-    // Expire old OAuth attempts
-    // --------------------------------------------------------
+    /*
+     * --------------------------------------------------------
+     * Make sure the signed state and server-side state
+     * agree about the Bridge account being connected.
+     * --------------------------------------------------------
+     */
 
-    const stateAge =
-        Date.now() -
-        pending.createdAt;
+    const stateLogin =
+        stateData.login
+            ? String(
+                stateData.login
+            )
+                .trim()
+                .toLowerCase()
+            : null;
+
+    const pendingLogin =
+        pending.login
+            ? String(
+                pending.login
+            )
+                .trim()
+                .toLowerCase()
+            : null;
 
 
     if (
-        stateAge >
-        10 * 60 * 1000
+        stateLogin !==
+        pendingLogin
     ) {
+
+        console.warn(
+            "⚠️ YouTube OAuth state mismatch."
+        );
+
 
         return res
             .status(400)
             .send(
-                "OAuth session expired. Please try again."
+                "Invalid OAuth state."
             );
+
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * If connecting YouTube to an existing Bridge account,
+     * verify that the authenticated Bridge session owns it.
+     * --------------------------------------------------------
+     */
+
+    if (stateLogin) {
+
+        const session =
+            getSessionFromRequest(
+                req
+            );
+
+
+        if (!session) {
+
+            return res
+                .status(401)
+                .send(
+                    "You must be logged in to connect YouTube to an existing Bridge account."
+                );
+
+        }
+
+
+        if (
+            session.login !==
+            stateLogin
+        ) {
+
+            console.warn(
+                "⚠️ Unauthorized YouTube account-link attempt:",
+                {
+                    requestedLogin:
+                        stateLogin,
+
+                    sessionLogin:
+                        session.login
+                }
+            );
+
+
+            return res
+                .status(403)
+                .send(
+                    "You are not authorized to connect YouTube to this Bridge account."
+                );
+
+        }
 
     }
 
@@ -337,15 +567,17 @@ async function callback(req, res) {
 
 
         /*
+         * ----------------------------------------------------
          * If a creator already has a Bridge account,
          * attach YouTube to that existing overlay.
+         * ----------------------------------------------------
          */
 
-        if (pending.login) {
+        if (stateLogin) {
 
             account =
                 await Account.loadByLogin(
-                    pending.login.toLowerCase()
+                    stateLogin
                 );
 
 
@@ -361,17 +593,20 @@ async function callback(req, res) {
 
 
         /*
+         * ----------------------------------------------------
          * If YouTube is already connected to a Bridge
          * account, reuse that account.
+         * ----------------------------------------------------
          */
 
         if (!account) {
 
             const existingYouTube =
-                await PlatformConnections.loadByPlatformUserId(
-                    "youtube",
-                    channelId
-                );
+                await PlatformConnections
+                    .loadByPlatformUserId(
+                        "youtube",
+                        channelId
+                    );
 
 
             if (existingYouTube) {
@@ -489,6 +724,21 @@ async function callback(req, res) {
 
 
         // ====================================================
+        // Create Secure Bridge Session
+        // ====================================================
+
+        setSessionCookie(
+            res,
+            {
+                login:
+                    bridgeLogin,
+
+                overlayId
+            }
+        );
+
+
+        // ====================================================
         // Return To Dashboard
         // ====================================================
 
@@ -498,6 +748,8 @@ async function callback(req, res) {
                 "http://localhost:3000"
             }/dashboard?login=${encodeURIComponent(
                 bridgeLogin
+            )}&overlayId=${encodeURIComponent(
+                overlayId
             )}`;
 
 
