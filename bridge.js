@@ -92,6 +92,7 @@ class Bridge extends EventEmitter {
             process.env.PORT || 3000;
 
         this.app = express();
+        this.app.set("trust proxy", 1);
         // ============================================================
 // Security Headers
 // ============================================================
