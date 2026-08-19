@@ -282,10 +282,10 @@ module.exports = async function TwitchCallback(req, res) {
         );
 
         const dashboardUrl =
-            `${
-                process.env.LANDING_URL ||
-                "http://localhost:3000"
-            }/dashboard?login=${encodeURIComponent(
+    `${
+        process.env.LANDING_URL ||
+        "https://www.thebridge4k.com"
+    }/dashboard?login=${encodeURIComponent(
                 dashboardLogin
             )}&overlayId=${encodeURIComponent(
                 overlayId

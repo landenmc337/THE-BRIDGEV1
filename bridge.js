@@ -1610,10 +1610,10 @@ this.app.post(
                 try {
 
                     const url =
-                        new URL(
-                            req.url,
-                            `http://${req.headers.host || "localhost"}`
-                        );
+    new URL(
+        req.url,
+        `https://${req.headers.host || "api.thebridge4k.com"}`
+    );
 
                     let overlayId =
                         url.searchParams.get(
