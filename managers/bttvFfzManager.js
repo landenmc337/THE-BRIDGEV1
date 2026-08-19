@@ -3,21 +3,35 @@ const BTTVFFZManager = {
     bttvEmotes: {},
     ffzEmotes: {},
 
-    async load(twitchUserId) {
+    async load(
+        twitchUserId,
+        twitchUsername
+    ) {
 
         this.bttvEmotes = {};
         this.ffzEmotes = {};
 
         await Promise.allSettled([
-            this.loadBTTV(twitchUserId),
-            this.loadFFZ(twitchUserId)
+            this.loadBTTV(
+                twitchUserId,
+                twitchUsername
+            ),
+
+            this.loadFFZ(
+                twitchUserId,
+                twitchUsername
+            )
         ]);
 
         console.log(
             `✅ BTTV + FFZ ready: ${
-                Object.keys(this.bttvEmotes).length
+                Object.keys(
+                    this.bttvEmotes
+                ).length
             } BTTV, ${
-                Object.keys(this.ffzEmotes).length
+                Object.keys(
+                    this.ffzEmotes
+                ).length
             } FFZ`
         );
 
@@ -38,7 +52,6 @@ const BTTVFFZManager = {
                 this.ffzEmotes.PepeLaugh
             )
         );
-
     },
 
 
@@ -46,9 +59,16 @@ const BTTVFFZManager = {
     // BTTV
     // ============================================================
 
-    async loadBTTV(twitchUserId) {
+    async loadBTTV(
+        twitchUserId,
+        twitchUsername
+    ) {
 
         try {
+
+            // ----------------------------------------------------
+            // BTTV Global
+            // ----------------------------------------------------
 
             const globalResponse =
                 await fetch(
@@ -72,6 +92,10 @@ const BTTVFFZManager = {
             }
 
 
+            // ----------------------------------------------------
+            // BTTV Channel
+            // ----------------------------------------------------
+
             if (!twitchUserId) {
                 return;
             }
@@ -84,10 +108,11 @@ const BTTVFFZManager = {
                     )}`
                 );
 
+
             if (!channelResponse.ok) {
 
                 console.log(
-                    "ℹ️ No BTTV channel emotes found."
+                    "ℹ️ No BTTV channel emotes found for this channel."
                 );
 
                 return;
@@ -100,7 +125,7 @@ const BTTVFFZManager = {
 
             const channelEmotes =
                 Array.isArray(
-                    channelData.channelEmotes
+                    channelData?.channelEmotes
                 )
                     ? channelData.channelEmotes
                     : [];
@@ -108,7 +133,7 @@ const BTTVFFZManager = {
 
             const sharedEmotes =
                 Array.isArray(
-                    channelData.sharedEmotes
+                    channelData?.sharedEmotes
                 )
                     ? channelData.sharedEmotes
                     : [];
@@ -153,6 +178,7 @@ const BTTVFFZManager = {
             return;
         }
 
+
         for (
             const emote of emotes
         ) {
@@ -189,7 +215,10 @@ const BTTVFFZManager = {
     // FFZ
     // ============================================================
 
-    async loadFFZ(twitchUserId) {
+    async loadFFZ(
+        twitchUserId,
+        twitchUsername
+    ) {
 
         try {
 
@@ -201,6 +230,7 @@ const BTTVFFZManager = {
                 await fetch(
                     "https://api.frankerfacez.com/v1/set/global"
                 );
+
 
             if (globalResponse.ok) {
 
@@ -251,20 +281,70 @@ const BTTVFFZManager = {
             // FFZ Channel
             // ----------------------------------------------------
 
-            if (!twitchUserId) {
-                return;
+            let channelResponse =
+                null;
+
+
+            // Try Twitch username first.
+            // FFZ identifies rooms by channel name.
+
+            if (twitchUsername) {
+
+                const username =
+                    String(
+                        twitchUsername
+                    )
+                        .trim()
+                        .toLowerCase();
+
+
+                channelResponse =
+                    await fetch(
+                        `https://api.frankerfacez.com/v1/room/${encodeURIComponent(
+                            username
+                        )}`
+                    );
+
+
+                if (
+                    channelResponse.ok
+                ) {
+
+                    console.log(
+                        `🎯 FFZ channel found by username: ${username}`
+                    );
+
+                }
+
             }
 
 
-            const channelResponse =
-                await fetch(
-                    `https://api.frankerfacez.com/v1/room/id/${encodeURIComponent(
-                        twitchUserId
-                    )}`
-                );
+            // Fall back to Twitch ID if
+            // username lookup didn't work.
+
+            if (
+                !channelResponse ||
+                !channelResponse.ok
+            ) {
+
+                if (twitchUserId) {
+
+                    channelResponse =
+                        await fetch(
+                            `https://api.frankerfacez.com/v1/room/id/${encodeURIComponent(
+                                twitchUserId
+                            )}`
+                        );
+
+                }
+
+            }
 
 
-            if (!channelResponse.ok) {
+            if (
+                !channelResponse ||
+                !channelResponse.ok
+            ) {
 
                 console.log(
                     "ℹ️ No FFZ channel emotes found."
@@ -315,7 +395,9 @@ const BTTVFFZManager = {
 
 
         for (
-            const set of Object.values(sets)
+            const set of Object.values(
+                sets
+            )
         ) {
 
             if (
@@ -414,12 +496,15 @@ const BTTVFFZManager = {
                 }
 
 
-                // --------------------------------------------
-                // Exact match first
-                // --------------------------------------------
+                // ------------------------------------------------
+                // Exact BTTV match
+                // ------------------------------------------------
 
                 const bttv =
-                    this.bttvEmotes[token];
+                    this.bttvEmotes[
+                        token
+                    ];
+
 
                 if (bttv) {
 
@@ -431,8 +516,15 @@ const BTTVFFZManager = {
                 }
 
 
+                // ------------------------------------------------
+                // Exact FFZ match
+                // ------------------------------------------------
+
                 const ffz =
-                    this.ffzEmotes[token];
+                    this.ffzEmotes[
+                        token
+                    ];
+
 
                 if (ffz) {
 
@@ -444,9 +536,9 @@ const BTTVFFZManager = {
                 }
 
 
-                // --------------------------------------------
-                // Case-insensitive fallback
-                // --------------------------------------------
+                // ------------------------------------------------
+                // Case-insensitive BTTV match
+                // ------------------------------------------------
 
                 const lower =
                     token.toLowerCase();
@@ -473,6 +565,10 @@ const BTTVFFZManager = {
 
                 }
 
+
+                // ------------------------------------------------
+                // Case-insensitive FFZ match
+                // ------------------------------------------------
 
                 const ffzKey =
                     Object.keys(
@@ -508,7 +604,10 @@ const BTTVFFZManager = {
     // Render
     // ============================================================
 
-    render(emote, token) {
+    render(
+        emote,
+        token
+    ) {
 
         return `
             <img

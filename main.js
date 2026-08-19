@@ -358,8 +358,9 @@ socket.onmessage = async (event) => {
         ) {
 
             await BTTVFFZManager.load(
-                data.userId
-            );
+    data.userId,
+    data.username
+);
 
             console.log(
                 "BTTV + FFZ loaded:",

@@ -1688,25 +1688,66 @@ badges: {},
                     );
 
                     const broadcasterId =
-                        this.broadcasters.get(
-                            overlayId
-                        );
+    this.broadcasters.get(
+        overlayId
+    );
 
-                    if (broadcasterId) {
+if (broadcasterId) {
 
-                        ws.send(
-                            JSON.stringify({
+    let broadcasterLogin = "";
 
-                                type:
-                                    "init",
+    try {
 
-                                userId:
-                                    broadcasterId,
+        const twitchConnection =
+            await PlatformConnections.loadByPlatformUserId(
+                "twitch",
+                String(broadcasterId)
+            );
 
-                                overlayId
-                            })
-                        );
-                    }
+        broadcasterLogin =
+            twitchConnection?.login ||
+            twitchConnection?.username ||
+            twitchConnection?.displayName ||
+            "";
+
+    } catch (err) {
+
+        console.warn(
+            "⚠️ Could not resolve Twitch broadcaster login:",
+            err
+        );
+
+    }
+
+    console.log(
+        "🎯 Twitch broadcaster:",
+        {
+            id:
+                broadcasterId,
+
+            username:
+                broadcasterLogin
+        }
+    );
+
+    ws.send(
+        JSON.stringify({
+
+            type:
+                "init",
+
+            userId:
+                broadcasterId,
+
+            username:
+                broadcasterLogin,
+
+            overlayId
+
+        })
+    );
+
+}
 
                 } catch (err) {
 
