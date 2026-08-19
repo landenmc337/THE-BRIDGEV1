@@ -323,6 +323,10 @@ socket.onmessage = async (event) => {
             data.overlayId
         );
 
+        // ===============================
+        // 7TV
+        // ===============================
+
         console.log(
             "Loading 7TV...",
             data.userId
@@ -337,6 +341,42 @@ socket.onmessage = async (event) => {
                 SevenTVManager.emotes
             ).length
         );
+
+
+        // ===============================
+        // BTTV + FFZ
+        // ===============================
+
+        console.log(
+            "Loading BTTV + FFZ...",
+            data.userId
+        );
+
+        if (
+            typeof BTTVFFZManager !==
+            "undefined"
+        ) {
+
+            await BTTVFFZManager.load(
+                data.userId
+            );
+
+            console.log(
+                "BTTV + FFZ loaded:",
+                {
+                    bttv:
+                        Object.keys(
+                            BTTVFFZManager.bttvEmotes
+                        ).length,
+
+                    ffz:
+                        Object.keys(
+                            BTTVFFZManager.ffzEmotes
+                        ).length
+                }
+            );
+
+        }
 
         return;
     }

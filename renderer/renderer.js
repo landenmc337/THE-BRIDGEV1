@@ -191,15 +191,29 @@ function createText(data) {
     }
 
     if (
-        typeof SevenTVManager !==
-        "undefined"
-    ) {
-        html =
-            SevenTVManager.process(
-                html
-            );
-    }
+    typeof SevenTVManager !==
+    "undefined"
+) {
+    html =
+        SevenTVManager.process(
+            html
+        );
+}
 
+
+// ========================================
+// BTTV + FFZ Emotes
+// ========================================
+
+if (
+    typeof BTTVFFZManager !==
+    "undefined"
+) {
+    html =
+        BTTVFFZManager.process(
+            html
+        );
+}
 
     // ========================================
     // Deeno4k Custom Message Color

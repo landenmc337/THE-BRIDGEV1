@@ -1202,24 +1202,29 @@ this.app.post(
                     connection.overlayId,
 
                 username:
-                    message.sender?.username ||
-                    message.sender?.name ||
-                    "Kick User",
+    message.sender?.username ||
+    message.sender?.name ||
+    "Kick User",
 
-                text:
-                    renderKickEmotes(
-                        message.content ||
-                            "",
-                        message.emotes ||
-                            []
-                    ),
+color:
+    message.sender?.identity?.color ||
+    message.sender?.color ||
+    null,
 
-                userId:
-                    message.sender?.user_id ||
-                    message.sender?.id ||
-                    "",
+text:
+    renderKickEmotes(
+        message.content ||
+            "",
+        message.emotes ||
+            []
+    ),
 
-                badges: {},
+userId:
+    message.sender?.user_id ||
+    message.sender?.id ||
+    "",
+
+badges: {},
 
                 emotes: {},
 
@@ -1963,8 +1968,8 @@ this.app.post(
                     data.username,
 
                 color:
-                    data.color ||
-                    "#ffffff",
+    data.color ||
+    null,
 
                 text:
                     data.text,
