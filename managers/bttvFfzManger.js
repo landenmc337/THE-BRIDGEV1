@@ -20,6 +20,25 @@ const BTTVFFZManager = {
                 Object.keys(this.ffzEmotes).length
             } FFZ`
         );
+
+        console.log(
+            "🔎 OMEGALUL:",
+            !!(
+                this.bttvEmotes.OMEGALUL ||
+                this.ffzEmotes.OMEGALUL
+            )
+        );
+
+        console.log(
+            "🔎 PepeLaugh:",
+            !!(
+                this.bttvEmotes.Pepelaugh ||
+                this.bttvEmotes.PepeLaugh ||
+                this.ffzEmotes.Pepelaugh ||
+                this.ffzEmotes.PepeLaugh
+            )
+        );
+
     },
 
 
@@ -31,10 +50,6 @@ const BTTVFFZManager = {
 
         try {
 
-            // -------------------------
-            // BTTV Global
-            // -------------------------
-
             const globalResponse =
                 await fetch(
                     "https://api.betterttv.net/3/cached/emotes/global"
@@ -45,19 +60,9 @@ const BTTVFFZManager = {
                 const globalData =
                     await globalResponse.json();
 
-                for (const emote of globalData) {
-
-                    if (!emote?.code || !emote?.id) {
-                        continue;
-                    }
-
-                    this.bttvEmotes[emote.code] = {
-                        provider: "bttv",
-                        id: emote.id,
-                        url:
-                            `https://cdn.betterttv.net/emote/${emote.id}/3x`
-                    };
-                }
+                this.addBTTVEmotes(
+                    globalData
+                );
 
                 console.log(
                     `🌍 Loaded ${
@@ -67,13 +72,10 @@ const BTTVFFZManager = {
             }
 
 
-            // -------------------------
-            // BTTV Channel
-            // -------------------------
-
             if (!twitchUserId) {
                 return;
             }
+
 
             const channelResponse =
                 await fetch(
@@ -90,6 +92,7 @@ const BTTVFFZManager = {
 
                 return;
             }
+
 
             const channelData =
                 await channelResponse.json();
@@ -111,24 +114,12 @@ const BTTVFFZManager = {
                     : [];
 
 
-            for (
-                const emote of [
+            this.addBTTVEmotes(
+                [
                     ...channelEmotes,
                     ...sharedEmotes
                 ]
-            ) {
-
-                if (!emote?.code || !emote?.id) {
-                    continue;
-                }
-
-                this.bttvEmotes[emote.code] = {
-                    provider: "bttv",
-                    id: emote.id,
-                    url:
-                        `https://cdn.betterttv.net/emote/${emote.id}/3x`
-                };
-            }
+            );
 
 
             console.log(
@@ -143,9 +134,51 @@ const BTTVFFZManager = {
         catch (err) {
 
             console.error(
-                "BTTV Error:",
+                "❌ BTTV Error:",
                 err
             );
+
+        }
+
+    },
+
+
+    // ============================================================
+    // BTTV Parser
+    // ============================================================
+
+    addBTTVEmotes(emotes) {
+
+        if (!Array.isArray(emotes)) {
+            return;
+        }
+
+        for (
+            const emote of emotes
+        ) {
+
+            if (
+                !emote?.code ||
+                !emote?.id
+            ) {
+                continue;
+            }
+
+
+            this.bttvEmotes[
+                emote.code
+            ] = {
+
+                provider:
+                    "bttv",
+
+                id:
+                    emote.id,
+
+                url:
+                    `https://cdn.betterttv.net/emote/${emote.id}/3x`
+
+            };
 
         }
 
@@ -160,9 +193,9 @@ const BTTVFFZManager = {
 
         try {
 
-            // -------------------------
+            // ----------------------------------------------------
             // FFZ Global
-            // -------------------------
+            // ----------------------------------------------------
 
             const globalResponse =
                 await fetch(
@@ -174,23 +207,54 @@ const BTTVFFZManager = {
                 const globalData =
                     await globalResponse.json();
 
-                this.addFFZSets(
-                    globalData?.sets
-                );
+
+                const defaultSets =
+                    Array.isArray(
+                        globalData?.default_sets
+                    )
+                        ? globalData.default_sets
+                        : [];
+
+
+                for (
+                    const setId of defaultSets
+                ) {
+
+                    const set =
+                        globalData?.sets?.[
+                            String(setId)
+                        ];
+
+
+                    if (!set) {
+                        continue;
+                    }
+
+
+                    this.addFFZEmotes(
+                        set.emoticons
+                    );
+
+                }
+
 
                 console.log(
-                    `🌍 Loaded global FFZ emotes`
+                    `🌍 Loaded FFZ global sets: ${
+                        defaultSets.length
+                    }`
                 );
+
             }
 
 
-            // -------------------------
+            // ----------------------------------------------------
             // FFZ Channel
-            // -------------------------
+            // ----------------------------------------------------
 
             if (!twitchUserId) {
                 return;
             }
+
 
             const channelResponse =
                 await fetch(
@@ -198,6 +262,7 @@ const BTTVFFZManager = {
                         twitchUserId
                     )}`
                 );
+
 
             if (!channelResponse.ok) {
 
@@ -207,6 +272,7 @@ const BTTVFFZManager = {
 
                 return;
             }
+
 
             const channelData =
                 await channelResponse.json();
@@ -225,7 +291,7 @@ const BTTVFFZManager = {
         catch (err) {
 
             console.error(
-                "FFZ Error:",
+                "❌ FFZ Error:",
                 err
             );
 
@@ -235,14 +301,18 @@ const BTTVFFZManager = {
 
 
     // ============================================================
-    // FFZ Set Parser
+    // FFZ Sets
     // ============================================================
 
     addFFZSets(sets) {
 
-        if (!sets || typeof sets !== "object") {
+        if (
+            !sets ||
+            typeof sets !== "object"
+        ) {
             return;
         }
+
 
         for (
             const set of Object.values(sets)
@@ -250,41 +320,70 @@ const BTTVFFZManager = {
 
             if (
                 !set ||
-                !Array.isArray(set.emoticons)
+                !Array.isArray(
+                    set.emoticons
+                )
             ) {
                 continue;
             }
 
-            for (
-                const emote of set.emoticons
+
+            this.addFFZEmotes(
+                set.emoticons
+            );
+
+        }
+
+    },
+
+
+    // ============================================================
+    // FFZ Emotes
+    // ============================================================
+
+    addFFZEmotes(emotes) {
+
+        if (!Array.isArray(emotes)) {
+            return;
+        }
+
+
+        for (
+            const emote of emotes
+        ) {
+
+            if (
+                !emote?.name ||
+                !emote?.id
             ) {
-
-                if (
-                    !emote?.name ||
-                    !emote?.id
-                ) {
-                    continue;
-                }
-
-
-                const urls =
-                    emote.urls || {};
-
-
-                const url =
-                    urls["4"] ||
-                    urls["2"] ||
-                    urls["1"] ||
-                    `https://cdn.frankerfacez.com/emoticon/${emote.id}/4`;
-
-
-                this.ffzEmotes[emote.name] = {
-                    provider: "ffz",
-                    id: emote.id,
-                    url
-                };
-
+                continue;
             }
+
+
+            const urls =
+                emote.urls || {};
+
+
+            const url =
+                urls["4"] ||
+                urls["2"] ||
+                urls["1"] ||
+                `https://cdn.frankerfacez.com/emoticon/${emote.id}/4`;
+
+
+            this.ffzEmotes[
+                emote.name
+            ] = {
+
+                provider:
+                    "ffz",
+
+                id:
+                    emote.id,
+
+                url
+
+            };
 
         }
 
@@ -315,22 +414,19 @@ const BTTVFFZManager = {
                 }
 
 
+                // --------------------------------------------
+                // Exact match first
+                // --------------------------------------------
+
                 const bttv =
                     this.bttvEmotes[token];
 
                 if (bttv) {
 
-                    return `
-                        <img
-                            class="emote bttv-emote"
-                            src="${bttv.url}"
-                            alt="${token}"
-                            title="${token}"
-                            loading="lazy"
-                            decoding="async"
-                            draggable="false"
-                        >
-                    `;
+                    return this.render(
+                        bttv,
+                        token
+                    );
 
                 }
 
@@ -340,17 +436,62 @@ const BTTVFFZManager = {
 
                 if (ffz) {
 
-                    return `
-                        <img
-                            class="emote ffz-emote"
-                            src="${ffz.url}"
-                            alt="${token}"
-                            title="${token}"
-                            loading="lazy"
-                            decoding="async"
-                            draggable="false"
-                        >
-                    `;
+                    return this.render(
+                        ffz,
+                        token
+                    );
+
+                }
+
+
+                // --------------------------------------------
+                // Case-insensitive fallback
+                // --------------------------------------------
+
+                const lower =
+                    token.toLowerCase();
+
+
+                const bttvKey =
+                    Object.keys(
+                        this.bttvEmotes
+                    ).find(
+                        key =>
+                            key.toLowerCase() ===
+                            lower
+                    );
+
+
+                if (bttvKey) {
+
+                    return this.render(
+                        this.bttvEmotes[
+                            bttvKey
+                        ],
+                        token
+                    );
+
+                }
+
+
+                const ffzKey =
+                    Object.keys(
+                        this.ffzEmotes
+                    ).find(
+                        key =>
+                            key.toLowerCase() ===
+                            lower
+                    );
+
+
+                if (ffzKey) {
+
+                    return this.render(
+                        this.ffzEmotes[
+                            ffzKey
+                        ],
+                        token
+                    );
 
                 }
 
@@ -359,6 +500,29 @@ const BTTVFFZManager = {
 
             })
             .join("");
+
+    },
+
+
+    // ============================================================
+    // Render
+    // ============================================================
+
+    render(emote, token) {
+
+        return `
+            <img
+                class="emote ${
+                    emote.provider
+                }-emote"
+                src="${emote.url}"
+                alt="${token}"
+                title="${token}"
+                loading="lazy"
+                decoding="async"
+                draggable="false"
+            >
+        `;
 
     }
 
