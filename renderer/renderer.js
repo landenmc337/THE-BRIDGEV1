@@ -132,6 +132,12 @@ function getFallbackColor(
 
 function createUsername(data) {
 
+    /*
+     * 7TV Namepaint
+     *
+     * The paint renderer receives the complete 7TV paint object.
+     * paintManager.js converts the PaintData layers into CSS.
+     */
     const style =
         window.buildPaint
             ? window.buildPaint(
@@ -139,6 +145,10 @@ function createUsername(data) {
             )
             : null;
 
+
+    /*
+     * Convert the JavaScript style object into valid CSS.
+     */
     const css =
         style
             ? Object.entries(style)
@@ -154,18 +164,28 @@ function createUsername(data) {
                 .join(";")
             : "";
 
+
+    /*
+     * Normal username color remains as the fallback.
+     *
+     * If a 7TV paint exists, the paint's
+     * background-clip/text-fill properties take over.
+     */
     const usernameColor =
         data.color ||
         getFallbackColor(
             data.username
         );
 
+
     const colorStyle =
         `color:${usernameColor};`;
 
+
     return `
         <span
-            class="username"
+            class="username${style ? " seventv-paint" : ""}"
+            ${style ? `data-seventv-paint-id="${data.sevenTV?.paint?.id || ""}"` : ""}
             style="${colorStyle}${css}"
         >
             ${data.username}:
@@ -179,10 +199,16 @@ function createText(data) {
     let html =
         data.text || "";
 
+
+    // ========================================
+    // Standard emotes
+    // ========================================
+
     if (
         typeof EmoteManager !==
         "undefined"
     ) {
+
         html =
             EmoteManager.process(
                 html,
@@ -190,30 +216,38 @@ function createText(data) {
             );
     }
 
+
+    // ========================================
+    // 7TV emotes
+    // ========================================
+
     if (
-    typeof SevenTVManager !==
-    "undefined"
-) {
-    html =
-        SevenTVManager.process(
-            html
-        );
-}
+        typeof SevenTVManager !==
+        "undefined"
+    ) {
+
+        html =
+            SevenTVManager.process(
+                html
+            );
+    }
 
 
-// ========================================
-// BTTV + FFZ Emotes
-// ========================================
+    // ========================================
+    // BTTV + FFZ Emotes
+    // ========================================
 
-if (
-    typeof BTTVFFZManager !==
-    "undefined"
-) {
-    html =
-        BTTVFFZManager.process(
-            html
-        );
-}
+    if (
+        typeof BTTVFFZManager !==
+        "undefined"
+    ) {
+
+        html =
+            BTTVFFZManager.process(
+                html
+            );
+    }
+
 
     // ========================================
     // Deeno4k Custom Message Color
@@ -223,6 +257,7 @@ if (
         String(
             data.username || ""
         ).toLowerCase() === "deeno4k";
+
 
     if (isDeeno) {
 
@@ -235,6 +270,7 @@ if (
             </span>
         `;
     }
+
 
     return `
         <span class="text">
@@ -255,10 +291,12 @@ function getFadeTimer() {
             window.location.search
         );
 
+
     const value =
         Number(
             params.get("fadeTimer")
         );
+
 
     if (
         !Number.isFinite(value) ||
@@ -266,6 +304,7 @@ function getFadeTimer() {
     ) {
         return 0;
     }
+
 
     return value;
 }
@@ -281,6 +320,7 @@ function addMessage(data) {
         document.getElementById(
             "chat"
         );
+
 
     if (!chat) {
 
@@ -304,6 +344,7 @@ function addMessage(data) {
             String(
                 data.userId || ""
             ).toLowerCase();
+
 
         const timeoutUsername =
             String(
@@ -331,6 +372,7 @@ function addMessage(data) {
                             ""
                         ).toLowerCase();
 
+
                     const messageUsername =
                         String(
                             message.dataset.username ||
@@ -356,6 +398,7 @@ function addMessage(data) {
                 }
             );
 
+
         return;
     }
 
@@ -377,12 +420,14 @@ function addMessage(data) {
             data.username || ""
         ).trim().toLowerCase();
 
+
     const hiddenBots =
         Array.isArray(
             RelaySettings.hiddenBots
         )
             ? RelaySettings.hiddenBots
             : [];
+
 
     if (
         data.platform === "twitch" &&
@@ -400,6 +445,10 @@ function addMessage(data) {
         return;
     }
 
+
+    // ========================================
+    // Message Layout
+    // ========================================
 
     const layoutName =
         RelaySettings.showBubble
@@ -423,7 +472,10 @@ function addMessage(data) {
         `message layout-${layoutName} new-message`;
 
 
+    // ========================================
     // Store Twitch user ID
+    // ========================================
+
     if (data.userId) {
 
         message.dataset.userId =
@@ -433,7 +485,10 @@ function addMessage(data) {
     }
 
 
+    // ========================================
     // Store username as fallback
+    // ========================================
+
     if (data.username) {
 
         message.dataset.username =
@@ -442,6 +497,10 @@ function addMessage(data) {
             ).toLowerCase();
     }
 
+
+    // ========================================
+    // Render message
+    // ========================================
 
     message.innerHTML =
         html;
@@ -463,9 +522,11 @@ function addMessage(data) {
         const oldestMessage =
             chat.firstElementChild;
 
+
         if (!oldestMessage) {
             break;
         }
+
 
         oldestMessage.remove();
     }
@@ -493,6 +554,7 @@ function addMessage(data) {
     const fadeTimer =
         getFadeTimer();
 
+
     if (
         fadeTimer > 0
     ) {
@@ -505,6 +567,7 @@ function addMessage(data) {
                 ) {
                     return;
                 }
+
 
                 message.classList.add(
                     "fade-out"
