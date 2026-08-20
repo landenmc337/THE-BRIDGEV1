@@ -12,19 +12,280 @@ Log.setLevel(
 );
 
 // ============================================================
+// Configuration
+// ============================================================
+
+const OFFLINE_CHECK_INTERVAL =
+    2 * 60 * 1000;
+
+const RETRY_INTERVAL =
+    2 * 60 * 1000;
+
+const QUOTA_COOLDOWN =
+    15 * 60 * 1000;
+
+// ============================================================
 // Active YouTube Watchers
 // ============================================================
 
-const watchers = new Map();
+const watchers =
+    new Map();
+
+// ============================================================
+// Account Scheduling
+// ============================================================
+
+const nextChecks =
+    new Map();
+
+let quotaPausedUntil =
+    0;
+
+// ============================================================
+// Helpers
+// ============================================================
+
+function isQuotaError(err) {
+
+    const message =
+        String(
+            err?.message ||
+            ""
+        ).toLowerCase();
+
+    const responseData =
+        err?.response?.data ||
+        err?.response?.body ||
+        err?.errors ||
+        "";
+
+    const responseText =
+        JSON.stringify(
+            responseData
+        ).toLowerCase();
+
+    return (
+        message.includes(
+            "quotaexceeded"
+        ) ||
+        message.includes(
+            "quota exceeded"
+        ) ||
+        message.includes(
+            "quotaExceeded"
+        ) ||
+        responseText.includes(
+            "quotaexceeded"
+        )
+    );
+
+}
+
+function isParserError(err) {
+
+    const message =
+        String(
+            err?.message ||
+            ""
+        ).toLowerCase();
+
+    const stack =
+        String(
+            err?.stack ||
+            ""
+        ).toLowerCase();
+
+    return (
+        message.includes(
+            "parsingerror"
+        ) ||
+        message.includes(
+            "cannot cast"
+        ) ||
+        stack.includes(
+            "parser"
+        ) ||
+        stack.includes(
+            "feedtabbedheader"
+        )
+    );
+
+}
+
+function getRetryTime(
+    overlayId,
+    fallback
+) {
+
+    return (
+        nextChecks.get(
+            overlayId
+        ) ||
+        (
+            Date.now() +
+            fallback
+        )
+    );
+
+}
+
+function scheduleCheck(
+    account,
+    delay
+) {
+
+    nextChecks.set(
+        account.overlayId,
+        Date.now() + delay
+    );
+
+}
+
+function clearScheduledCheck(
+    overlayId
+) {
+
+    nextChecks.delete(
+        overlayId
+    );
+
+}
+
+function isQuotaPaused() {
+
+    return (
+        Date.now() <
+        quotaPausedUntil
+    );
+
+}
+
+// ============================================================
+// Safe YouTube API Error Logging
+// ============================================================
+
+function logYouTubeError(
+    account,
+    err
+) {
+
+    if (
+        isQuotaError(err)
+    ) {
+
+        quotaPausedUntil =
+            Date.now() +
+            QUOTA_COOLDOWN;
+
+        console.warn(
+            `⏸️ YouTube quota reached. Pausing YouTube API checks for ${Math.round(
+                QUOTA_COOLDOWN / 60000
+            )} minutes.`
+        );
+
+        return;
+
+    }
+
+    if (
+        isParserError(err)
+    ) {
+
+        console.warn(
+            `⚠️ YouTube parser response changed for ${account.login}. Skipping this check.`
+        );
+
+        return;
+
+    }
+
+    console.error(
+        `❌ YouTube error for ${account.login}:`,
+        err?.message ||
+        err
+    );
+
+}
+
+// ============================================================
+// Cleanup Watcher
+// ============================================================
+
+function removeWatcher(
+    overlayId
+) {
+
+    const watcher =
+        watchers.get(
+            overlayId
+        );
+
+    if (
+        !watcher
+    ) {
+
+        return;
+
+    }
+
+    try {
+
+        if (
+            watcher.liveChat &&
+            typeof watcher.liveChat.stop ===
+                "function"
+        ) {
+
+            watcher.liveChat.stop();
+
+        }
+
+    } catch {
+        // Ignore cleanup errors.
+    }
+
+    watchers.delete(
+        overlayId
+    );
+
+}
 
 // ============================================================
 // Connect One YouTube Account
 // ============================================================
 
-async function connectAccount(account) {
+async function connectAccount(
+    account
+) {
 
     const overlayId =
         account.overlayId;
+
+    // --------------------------------------------------------
+    // Duplicate watcher protection
+    // --------------------------------------------------------
+
+    if (
+        watchers.has(
+            overlayId
+        )
+    ) {
+
+        return true;
+
+    }
+
+    // --------------------------------------------------------
+    // Quota protection
+    // --------------------------------------------------------
+
+    if (
+        isQuotaPaused()
+    ) {
+
+        return false;
+
+    }
 
     try {
 
@@ -34,35 +295,37 @@ async function connectAccount(account) {
                 "youtube"
             );
 
-        if (!connection) {
+        if (
+            !connection
+        ) {
 
             console.log(
                 `📺 No YouTube connection for ${account.login}.`
             );
 
-            return false;
-
-        }
-
-        if (!connection.refreshToken) {
-
-            console.log(
-                `❌ YouTube refresh token missing for ${account.login}.`
+            scheduleCheck(
+                account,
+                OFFLINE_CHECK_INTERVAL
             );
 
             return false;
 
         }
 
-        // ----------------------------------------------------
-        // Prevent duplicate watchers
-        // ----------------------------------------------------
-
         if (
-            watchers.has(overlayId)
+            !connection.refreshToken
         ) {
 
-            return true;
+            console.warn(
+                `⚠️ YouTube refresh token missing for ${account.login}.`
+            );
+
+            scheduleCheck(
+                account,
+                OFFLINE_CHECK_INTERVAL
+            );
+
+            return false;
 
         }
 
@@ -87,6 +350,10 @@ async function connectAccount(account) {
 
         // ----------------------------------------------------
         // Find active live broadcast
+        //
+        // Important:
+        // Only request active broadcasts.
+        // Only ask for one result.
         // ----------------------------------------------------
 
         const broadcastResponse =
@@ -94,29 +361,38 @@ async function connectAccount(account) {
 
                 part: [
                     "snippet",
-                    "contentDetails",
                     "status"
                 ],
 
-                mine: true
+                mine: true,
+
+                broadcastStatus:
+                    "active",
+
+                maxResults:
+                    1
 
             });
 
         const broadcasts =
-            broadcastResponse.data.items ||
+            broadcastResponse?.data?.items ||
             [];
 
         const liveBroadcast =
-            broadcasts.find(
-                broadcast =>
-                    broadcast.status?.lifeCycleStatus ===
-                    "live"
-            );
+            broadcasts[0] ||
+            null;
 
-        if (!liveBroadcast) {
+        if (
+            !liveBroadcast
+        ) {
 
             console.log(
                 `📺 ${account.login} is not currently live.`
+            );
+
+            scheduleCheck(
+                account,
+                OFFLINE_CHECK_INTERVAL
             );
 
             return false;
@@ -124,17 +400,45 @@ async function connectAccount(account) {
         }
 
         const videoId =
-            liveBroadcast.id;
+            String(
+                liveBroadcast.id ||
+                ""
+            );
 
         const liveChatId =
             liveBroadcast
                 .snippet
-                ?.liveChatId;
+                ?.liveChatId ||
+            null;
 
-        if (!liveChatId) {
+        if (
+            !videoId
+        ) {
 
-            console.log(
-                `❌ No live chat found for ${account.login}.`
+            console.warn(
+                `⚠️ YouTube returned an active broadcast without a video ID for ${account.login}.`
+            );
+
+            scheduleCheck(
+                account,
+                RETRY_INTERVAL
+            );
+
+            return false;
+
+        }
+
+        if (
+            !liveChatId
+        ) {
+
+            console.warn(
+                `⚠️ No live chat found for ${account.login}.`
+            );
+
+            scheduleCheck(
+                account,
+                RETRY_INTERVAL
             );
 
             return false;
@@ -151,23 +455,93 @@ async function connectAccount(account) {
 
         // ----------------------------------------------------
         // Start YouTube chat client
+        //
+        // youtubei.js is only used AFTER the official API
+        // confirms the channel is actually live.
         // ----------------------------------------------------
 
-        const yt =
-            await Innertube.create();
+        let yt;
 
-        const info =
-            await yt.getInfo(
-                videoId
+        try {
+
+            yt =
+                await Innertube.create();
+
+        } catch (err) {
+
+            logYouTubeError(
+                account,
+                err
             );
 
-        const liveChat =
-            await info.getLiveChat();
+            scheduleCheck(
+                account,
+                RETRY_INTERVAL
+            );
 
-        if (!liveChat) {
+            return false;
 
-            console.log(
-                `❌ YouTube live chat unavailable for ${account.login}.`
+        }
+
+        let info;
+
+        try {
+
+            info =
+                await yt.getInfo(
+                    videoId
+                );
+
+        } catch (err) {
+
+            logYouTubeError(
+                account,
+                err
+            );
+
+            scheduleCheck(
+                account,
+                RETRY_INTERVAL
+            );
+
+            return false;
+
+        }
+
+        let liveChat;
+
+        try {
+
+            liveChat =
+                await info.getLiveChat();
+
+        } catch (err) {
+
+            logYouTubeError(
+                account,
+                err
+            );
+
+            scheduleCheck(
+                account,
+                RETRY_INTERVAL
+            );
+
+            return false;
+
+        }
+
+        if (
+            !liveChat
+        ) {
+
+            console.warn(
+                `⚠️ YouTube live chat unavailable for ${account.login}.`
+            );
+
+            scheduleCheck(
+                account,
+                RETRY_INTERVAL
             );
 
             return false;
@@ -178,32 +552,39 @@ async function connectAccount(account) {
             `▶ Starting YouTube chat for ${account.login}...`
         );
 
-        await liveChat.start();
-
-        console.log(
-            `✅ YouTube chat connected: ${account.login}`
-        );
-
         // ----------------------------------------------------
-        // Store watcher
+        // Store watcher BEFORE starting chat
+        //
+        // This prevents duplicate watchers if start()
+        // triggers events immediately.
         // ----------------------------------------------------
+
+        const watcher = {
+
+            accountLogin:
+                account.login,
+
+            overlayId,
+
+            videoId,
+
+            liveChatId,
+
+            liveChat
+
+        };
 
         watchers.set(
             overlayId,
-            {
-                accountLogin:
-                    account.login,
+            watcher
+        );
 
-                overlayId,
-
-                videoId,
-
-                liveChat
-            }
+        clearScheduledCheck(
+            overlayId
         );
 
         // ----------------------------------------------------
-        // Receive chat messages
+        // Chat update
         // ----------------------------------------------------
 
         liveChat.addEventListener(
@@ -212,13 +593,17 @@ async function connectAccount(account) {
 
                 try {
 
+                    const actions =
+                        event?.detail ||
+                        [];
+
                     for (
                         const action
-                        of event.detail
+                        of actions
                     ) {
 
                         if (
-                            action.type !==
+                            action?.type !==
                             "AddChatItemAction"
                         ) {
 
@@ -228,6 +613,14 @@ async function connectAccount(account) {
 
                         const msg =
                             action.item;
+
+                        if (
+                            !msg
+                        ) {
+
+                            continue;
+
+                        }
 
                         bridge.send({
 
@@ -255,6 +648,10 @@ async function connectAccount(account) {
                                 msg.author?.id ??
                                 "",
 
+                            channelId:
+                                account.userId ??
+                                "",
+
                             timestamp:
                                 Date.now()
 
@@ -264,8 +661,9 @@ async function connectAccount(account) {
 
                 } catch (err) {
 
-                    console.error(
-                        `❌ YouTube chat processing error for ${account.login}:`,
+                    console.warn(
+                        `⚠️ YouTube chat message processing issue for ${account.login}:`,
+                        err?.message ||
                         err
                     );
 
@@ -274,20 +672,126 @@ async function connectAccount(account) {
             }
         );
 
+        // ----------------------------------------------------
+        // Chat ended
+        // ----------------------------------------------------
+
+        liveChat.addEventListener(
+            "end",
+            () => {
+
+                console.log(
+                    `📴 YouTube chat ended for ${account.login}.`
+                );
+
+                removeWatcher(
+                    overlayId
+                );
+
+                scheduleCheck(
+                    account,
+                    RETRY_INTERVAL
+                );
+
+            }
+        );
+
+        // ----------------------------------------------------
+        // Chat error
+        // ----------------------------------------------------
+
+        liveChat.addEventListener(
+            "error",
+            (err) => {
+
+                console.warn(
+                    `⚠️ YouTube chat error for ${account.login}:`,
+                    err?.message ||
+                    err
+                );
+
+                removeWatcher(
+                    overlayId
+                );
+
+                scheduleCheck(
+                    account,
+                    RETRY_INTERVAL
+                );
+
+            }
+        );
+
+        // ----------------------------------------------------
+        // Start chat
+        // ----------------------------------------------------
+
+        try {
+
+            const started =
+                await liveChat.start();
+
+            if (
+                started === false
+            ) {
+
+                console.warn(
+                    `⚠️ YouTube chat failed to start for ${account.login}.`
+                );
+
+                removeWatcher(
+                    overlayId
+                );
+
+                scheduleCheck(
+                    account,
+                    RETRY_INTERVAL
+                );
+
+                return false;
+
+            }
+
+        } catch (err) {
+
+            removeWatcher(
+                overlayId
+            );
+
+            logYouTubeError(
+                account,
+                err
+            );
+
+            scheduleCheck(
+                account,
+                RETRY_INTERVAL
+            );
+
+            return false;
+
+        }
+
+        console.log(
+            `✅ YouTube chat connected: ${account.login}`
+        );
+
         return true;
 
     } catch (err) {
 
-        console.error(
-            `❌ YouTube connection failed for ${account.login}:`
-        );
-
-        console.error(
+        logYouTubeError(
+            account,
             err
         );
 
-        watchers.delete(
+        removeWatcher(
             overlayId
+        );
+
+        scheduleCheck(
+            account,
+            RETRY_INTERVAL
         );
 
         return false;
@@ -301,6 +805,14 @@ async function connectAccount(account) {
 // ============================================================
 
 async function checkAccounts() {
+
+    if (
+        isQuotaPaused()
+    ) {
+
+        return;
+
+    }
 
     try {
 
@@ -319,18 +831,24 @@ async function checkAccounts() {
 
         }
 
-        console.log(
-            `📋 Checking YouTube for ${accounts.length} Bridge account(s)...`
-        );
+        const now =
+            Date.now();
 
         for (
             const account
             of accounts
         ) {
 
+            const overlayId =
+                account.overlayId;
+
+            // ------------------------------------------------
+            // Active watcher
+            // ------------------------------------------------
+
             if (
                 watchers.has(
-                    account.overlayId
+                    overlayId
                 )
             ) {
 
@@ -338,19 +856,69 @@ async function checkAccounts() {
 
             }
 
+            // ------------------------------------------------
+            // Scheduled check
+            // ------------------------------------------------
+
+            const nextCheck =
+                nextChecks.get(
+                    overlayId
+                ) || 0;
+
+            if (
+                now <
+                nextCheck
+            ) {
+
+                continue;
+
+            }
+
+            // ------------------------------------------------
+            // Check account
+            // ------------------------------------------------
+
             await connectAccount(
                 account
             );
+
+            // ------------------------------------------------
+            // Stop immediately if quota was reached
+            // ------------------------------------------------
+
+            if (
+                isQuotaPaused()
+            ) {
+
+                break;
+
+            }
 
         }
 
     } catch (err) {
 
-        console.error(
-            "❌ Failed to check YouTube accounts:"
-        );
+        if (
+            isQuotaError(err)
+        ) {
+
+            quotaPausedUntil =
+                Date.now() +
+                QUOTA_COOLDOWN;
+
+            console.warn(
+                `⏸️ YouTube quota reached. Pausing checks for ${Math.round(
+                    QUOTA_COOLDOWN / 60000
+                )} minutes.`
+            );
+
+            return;
+
+        }
 
         console.error(
+            "❌ Failed to check YouTube accounts:",
+            err?.message ||
             err
         );
 
@@ -373,10 +941,22 @@ async function startWatcher() {
     setInterval(
         async () => {
 
-            await checkAccounts();
+            try {
+
+                await checkAccounts();
+
+            } catch (err) {
+
+                console.error(
+                    "❌ YouTube watcher cycle failed:",
+                    err?.message ||
+                    err
+                );
+
+            }
 
         },
-        60000
+        30 * 1000
     );
 
 }
@@ -387,7 +967,14 @@ async function startWatcher() {
 
 startWatcher();
 
+// ============================================================
+// Exports
+// ============================================================
+
 module.exports = {
+
     connectAccount,
+
     checkAccounts
+
 };
