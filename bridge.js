@@ -551,7 +551,8 @@ this.app.use(
                     `
                     SELECT
                         hidden_bots,
-                        show_commands
+                        show_commands,
+                        bubble_opacity
                     FROM overlay_settings
                     WHERE overlay_id = $1
                     LIMIT 1
@@ -574,7 +575,14 @@ this.app.use(
                     "",
 
                 showCommands:
-                    row?.show_commands === true
+                    row?.show_commands === true,
+
+                bubbleOpacity:
+                    Number.isFinite(
+                        Number(row?.bubble_opacity)
+                    )
+                        ? Math.min(100, Math.max(10, Number(row.bubble_opacity)))
+                        : 100
 
             });
 
@@ -706,17 +714,29 @@ this.app.use(
             const showCommands =
                 req.body?.showCommands === true;
 
+            const rawBubbleOpacity =
+                Number(
+                    req.body?.bubbleOpacity
+                );
+
+            const bubbleOpacity =
+                Number.isFinite(rawBubbleOpacity)
+                    ? Math.min(100, Math.max(10, rawBubbleOpacity))
+                    : 100;
+
             await db.query(
                 `
                 INSERT INTO overlay_settings (
                     overlay_id,
                     hidden_bots,
-                    show_commands
+                    show_commands,
+                    bubble_opacity
                 )
                 VALUES (
                     $1,
                     $2,
-                    $3
+                    $3,
+                    $4
                 )
                 ON CONFLICT (
                     overlay_id
@@ -725,12 +745,15 @@ this.app.use(
                     hidden_bots =
                         EXCLUDED.hidden_bots,
                     show_commands =
-                        EXCLUDED.show_commands
+                        EXCLUDED.show_commands,
+                    bubble_opacity =
+                        EXCLUDED.bubble_opacity
                 `,
                 [
                     account.overlayId,
                     hiddenBots,
-                    showCommands
+                    showCommands,
+                    bubbleOpacity
                 ]
             );
 
@@ -739,7 +762,8 @@ this.app.use(
                 overlayId:
                     account.overlayId,
                 hiddenBots,
-                showCommands
+                showCommands,
+                bubbleOpacity
             });
 
         } catch (err) {

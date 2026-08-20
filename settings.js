@@ -21,6 +21,23 @@ const RelaySettings = (() => {
         null;
 
 
+    const parsedBubbleOpacity =
+        Number(
+            params.get("bubbleOpacity")
+        );
+
+    const bubbleOpacity =
+        Number.isFinite(parsedBubbleOpacity)
+            ? Math.min(100, Math.max(10, parsedBubbleOpacity))
+            : 100;
+
+
+    document.documentElement.style.setProperty(
+        "--bubble-opacity",
+        String(bubbleOpacity / 100)
+    );
+
+
     // ============================================
     // Helper
     // ============================================
@@ -60,6 +77,8 @@ const RelaySettings = (() => {
         bubbleColor:
             params.get("bubbleColor")
             || "#27272A",
+
+        bubbleOpacity,
 
         showBubble:
             params.get("showBubble") !== "false",

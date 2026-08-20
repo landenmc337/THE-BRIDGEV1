@@ -133,6 +133,8 @@ const pool = new Pool({
 
                 show_commands BOOLEAN NOT NULL DEFAULT FALSE,
 
+                bubble_opacity INTEGER NOT NULL DEFAULT 100,
+
                 FOREIGN KEY (
                     overlay_id
                 )
@@ -163,6 +165,10 @@ const pool = new Pool({
             ALTER TABLE overlay_settings
             ADD COLUMN IF NOT EXISTS
             show_commands BOOLEAN NOT NULL DEFAULT FALSE;
+
+            ALTER TABLE overlay_settings
+            ADD COLUMN IF NOT EXISTS
+            bubble_opacity INTEGER NOT NULL DEFAULT 100;
         `);
 
 
