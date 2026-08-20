@@ -365,9 +365,17 @@ function buildShadow(shadow) {
             0
         );
 
+    /*
+     * 7TV paint shadows can be quite strong when rendered
+     * directly through CSS drop-shadow().
+     *
+     * Keep the original position and blur, but reduce the
+     * shadow opacity so the paint retains the subtle glow
+     * seen in the native 7TV renderer.
+     */
     return `drop-shadow(` +
         `${x}px ${y}px ${blur}px ` +
-        `${colorObjectToRGBA(shadow.color)}` +
+        `${colorObjectToRGBA(shadow.color, 0.45)}` +
         `)`;
 }
 
