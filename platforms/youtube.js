@@ -19,7 +19,7 @@ const OFFLINE_CHECK_INTERVAL =
     2 * 60 * 1000;
 
 const RETRY_INTERVAL =
-    2 * 60 * 1000;
+    60 * 1000;
 
 const QUOTA_COOLDOWN =
     15 * 60 * 1000;
@@ -71,9 +71,6 @@ function isQuotaError(err) {
         message.includes(
             "quota exceeded"
         ) ||
-        message.includes(
-            "quotaExceeded"
-        ) ||
         responseText.includes(
             "quotaexceeded"
         )
@@ -103,27 +100,10 @@ function isParserError(err) {
             "cannot cast"
         ) ||
         stack.includes(
-            "parser"
+            "feedtabbedheader"
         ) ||
         stack.includes(
-            "feedtabbedheader"
-        )
-    );
-
-}
-
-function getRetryTime(
-    overlayId,
-    fallback
-) {
-
-    return (
-        nextChecks.get(
-            overlayId
-        ) ||
-        (
-            Date.now() +
-            fallback
+            "youtube.js/dist/src/parser"
         )
     );
 
@@ -161,7 +141,7 @@ function isQuotaPaused() {
 }
 
 // ============================================================
-// Safe YouTube API Error Logging
+// Error Handling
 // ============================================================
 
 function logYouTubeError(
@@ -192,7 +172,7 @@ function logYouTubeError(
     ) {
 
         console.warn(
-            `⚠️ YouTube parser response changed for ${account.login}. Skipping this check.`
+            `⚠️ YouTube response changed for ${account.login}. Skipping this check and retrying later.`
         );
 
         return;
@@ -208,7 +188,7 @@ function logYouTubeError(
 }
 
 // ============================================================
-// Cleanup Watcher
+// Remove Watcher
 // ============================================================
 
 function removeWatcher(
@@ -262,7 +242,7 @@ async function connectAccount(
         account.overlayId;
 
     // --------------------------------------------------------
-    // Duplicate watcher protection
+    // Prevent duplicate watchers
     // --------------------------------------------------------
 
     if (
@@ -276,7 +256,7 @@ async function connectAccount(
     }
 
     // --------------------------------------------------------
-    // Quota protection
+    // Stop API requests while quota is exhausted
     // --------------------------------------------------------
 
     if (
@@ -349,11 +329,12 @@ async function connectAccount(
             });
 
         // ----------------------------------------------------
-        // Find active live broadcast
+        // Find current broadcasts
         //
-        // Important:
-        // Only request active broadcasts.
-        // Only ask for one result.
+        // IMPORTANT:
+        // Do NOT use broadcastStatus with mine=true.
+        // YouTube rejects that parameter combination in
+        // this request path.
         // ----------------------------------------------------
 
         const broadcastResponse =
@@ -364,13 +345,11 @@ async function connectAccount(
                     "status"
                 ],
 
-                mine: true,
-
-                broadcastStatus:
-                    "active",
+                mine:
+                    true,
 
                 maxResults:
-                    1
+                    5
 
             });
 
@@ -379,8 +358,15 @@ async function connectAccount(
             [];
 
         const liveBroadcast =
-            broadcasts[0] ||
-            null;
+            broadcasts.find(
+                broadcast =>
+                    broadcast.status?.lifeCycleStatus ===
+                    "live"
+            ) || null;
+
+        // ----------------------------------------------------
+        // Offline
+        // ----------------------------------------------------
 
         if (
             !liveBroadcast
@@ -416,7 +402,7 @@ async function connectAccount(
         ) {
 
             console.warn(
-                `⚠️ YouTube returned an active broadcast without a video ID for ${account.login}.`
+                `⚠️ YouTube returned a live broadcast without a video ID for ${account.login}.`
             );
 
             scheduleCheck(
@@ -454,10 +440,7 @@ async function connectAccount(
         );
 
         // ----------------------------------------------------
-        // Start YouTube chat client
-        //
-        // youtubei.js is only used AFTER the official API
-        // confirms the channel is actually live.
+        // Create YouTube chat client
         // ----------------------------------------------------
 
         let yt;
@@ -483,6 +466,10 @@ async function connectAccount(
 
         }
 
+        // ----------------------------------------------------
+        // Get video info
+        // ----------------------------------------------------
+
         let info;
 
         try {
@@ -507,6 +494,10 @@ async function connectAccount(
             return false;
 
         }
+
+        // ----------------------------------------------------
+        // Get live chat
+        // ----------------------------------------------------
 
         let liveChat;
 
@@ -553,30 +544,23 @@ async function connectAccount(
         );
 
         // ----------------------------------------------------
-        // Store watcher BEFORE starting chat
-        //
-        // This prevents duplicate watchers if start()
-        // triggers events immediately.
+        // Store watcher before starting chat
         // ----------------------------------------------------
-
-        const watcher = {
-
-            accountLogin:
-                account.login,
-
-            overlayId,
-
-            videoId,
-
-            liveChatId,
-
-            liveChat
-
-        };
 
         watchers.set(
             overlayId,
-            watcher
+            {
+                accountLogin:
+                    account.login,
+
+                overlayId,
+
+                videoId,
+
+                liveChatId,
+
+                liveChat
+            }
         );
 
         clearScheduledCheck(
@@ -584,7 +568,7 @@ async function connectAccount(
         );
 
         // ----------------------------------------------------
-        // Chat update
+        // Receive chat messages
         // ----------------------------------------------------
 
         liveChat.addEventListener(
@@ -662,7 +646,7 @@ async function connectAccount(
                 } catch (err) {
 
                     console.warn(
-                        `⚠️ YouTube chat message processing issue for ${account.login}:`,
+                        `⚠️ YouTube chat processing issue for ${account.login}:`,
                         err?.message ||
                         err
                     );
@@ -673,7 +657,7 @@ async function connectAccount(
         );
 
         // ----------------------------------------------------
-        // Chat ended
+        // Live chat ended
         // ----------------------------------------------------
 
         liveChat.addEventListener(
@@ -697,7 +681,7 @@ async function connectAccount(
         );
 
         // ----------------------------------------------------
-        // Chat error
+        // Live chat error
         // ----------------------------------------------------
 
         liveChat.addEventListener(
@@ -723,7 +707,7 @@ async function connectAccount(
         );
 
         // ----------------------------------------------------
-        // Start chat
+        // Start live chat
         // ----------------------------------------------------
 
         try {
@@ -789,10 +773,16 @@ async function connectAccount(
             overlayId
         );
 
-        scheduleCheck(
-            account,
-            RETRY_INTERVAL
-        );
+        if (
+            !isQuotaPaused()
+        ) {
+
+            scheduleCheck(
+                account,
+                RETRY_INTERVAL
+            );
+
+        }
 
         return false;
 
@@ -843,7 +833,7 @@ async function checkAccounts() {
                 account.overlayId;
 
             // ------------------------------------------------
-            // Active watcher
+            // Already watching
             // ------------------------------------------------
 
             if (
@@ -857,7 +847,7 @@ async function checkAccounts() {
             }
 
             // ------------------------------------------------
-            // Scheduled check
+            // Account is not due yet
             // ------------------------------------------------
 
             const nextCheck =
@@ -883,7 +873,7 @@ async function checkAccounts() {
             );
 
             // ------------------------------------------------
-            // Stop immediately if quota was reached
+            // Stop the cycle immediately if quota is hit
             // ------------------------------------------------
 
             if (
