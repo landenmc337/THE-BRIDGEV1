@@ -166,7 +166,7 @@ function createUsername(data) {
 
 
     /*
-     * Normal username color remains as the fallback.
+     * Normal username color remains the fallback.
      *
      * If a 7TV paint exists, the paint's
      * background-clip/text-fill properties take over.
@@ -182,10 +182,40 @@ function createUsername(data) {
         `color:${usernameColor};`;
 
 
+    /*
+     * Build the username element.
+     *
+     * When a 7TV paint exists:
+     * - Add the seventv-paint class
+     * - Store the exact 7TV paint ID
+     */
+    const paintClass =
+        style
+            ? " seventv-paint"
+            : "";
+
+
+    const paintId =
+        data.sevenTV?.paint?.id
+            ? String(
+                data.sevenTV.paint.id
+            ).replace(
+                /"/g,
+                "&quot;"
+            )
+            : "";
+
+
+    const paintAttribute =
+        paintId
+            ? `data-seventv-paint-id="${paintId}"`
+            : "";
+
+
     return `
         <span
-            class="username${style ? " seventv-paint" : ""}"
-            ${style ? `data-seventv-paint-id="${data.sevenTV?.paint?.id || ""}"` : ""}
+            class="username${paintClass}"
+            ${paintAttribute}
             style="${colorStyle}${css}"
         >
             ${data.username}:
