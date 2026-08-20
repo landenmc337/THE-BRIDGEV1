@@ -1,724 +1,348 @@
-console.log("✅ 7TV paintManager.js loaded");
-
+console.log("✅ 7TV paint renderer loaded");
 
 /*
- * ============================================================
- * The Bridge4K
- * 7TV Namepaint Renderer
+ * TheBridge4K 7TV Namepaint renderer
  *
- * Designed to mirror 7TV's paint rendering behavior.
+ * This renderer follows 7TV's paint model:
+ * - paint.data.layers
+ * - per-layer opacity
+ * - single-color layers
+ * - linear gradients
+ * - radial gradients
+ * - repeating gradients
+ * - image layers
+ * - paint shadows
  *
- * Supports:
- * - Current PaintData layers
- * - Legacy PaintData gradients
- * - Single colors
- * - Linear gradients
- * - Radial gradients
- * - Image layers
- * - Gradient stops
- * - Gradient positioning
- * - Gradient sizing
- * - Gradient repeat
- * - Layer opacity
- * - Paint drop shadows
- * - Text stroke
- * - Text shadow
- * - Text transform
- * - Font weight
- * ============================================================
+ * It also keeps support for the legacy 7TV `data.gradients` format.
+ *
+ * Important:
+ * 7TV's official extension does NOT force every paint to
+ * background-size: 100% 100%. That was one of the main reasons
+ * Bridge4K paints could look different.
  */
 
+function clamp(value, min = 0, max = 1) {
+    return Math.min(max, Math.max(min, Number(value) || 0));
+}
 
-// ============================================================
-// Color Helpers
-// ============================================================
-
-function colorToRGBA(color, opacity = 1) {
-
-    if (!color) {
-        return `rgba(0, 0, 0, ${opacity})`;
+function hexToRGBA(hex, opacity = 1) {
+    if (!hex) {
+        return `rgba(0, 0, 0, ${clamp(opacity)})`;
     }
 
+    let value = String(hex).replace("#", "");
 
-    // --------------------------------------------------------
-    // String color
-    // --------------------------------------------------------
+    if (value.length === 3) {
+        value = value
+            .split("")
+            .map(char => char + char)
+            .join("");
+    }
+
+    const r = parseInt(value.substring(0, 2), 16) || 0;
+    const g = parseInt(value.substring(2, 4), 16) || 0;
+    const b = parseInt(value.substring(4, 6), 16) || 0;
+
+    let alpha = 1;
+
+    if (value.length >= 8) {
+        alpha = parseInt(value.substring(6, 8), 16) / 255;
+    }
+
+    alpha *= clamp(opacity);
+
+    if (alpha >= 0.999) {
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function colorObjectToRGBA(color, opacity = 1) {
+    if (!color) {
+        return `rgba(0, 0, 0, ${clamp(opacity)})`;
+    }
 
     if (typeof color === "string") {
-
-        let hex =
-            color
-                .replace("#", "")
-                .trim();
-
-
-        if (
-            hex.length === 3
-        ) {
-
-            hex =
-                hex
-                    .split("")
-                    .map(
-                        char =>
-                            char + char
-                    )
-                    .join("");
-        }
-
-
-        const r =
-            parseInt(
-                hex.substring(0, 2),
-                16
-            ) || 0;
-
-
-        const g =
-            parseInt(
-                hex.substring(2, 4),
-                16
-            ) || 0;
-
-
-        const b =
-            parseInt(
-                hex.substring(4, 6),
-                16
-            ) || 0;
-
-
-        let a = 1;
-
-
-        if (
-            hex.length >= 8
-        ) {
-
-            a =
-                (
-                    parseInt(
-                        hex.substring(6, 8),
-                        16
-                    ) || 255
-                ) / 255;
-        }
-
-
-        a *= opacity;
-
-
-        return `rgba(${r}, ${g}, ${b}, ${a})`;
+        return hexToRGBA(color, opacity);
     }
 
-
-    // --------------------------------------------------------
-    // 7TV Color object
-    // --------------------------------------------------------
-
-    const r =
-        Number(
-            color.r
-        ) || 0;
-
-
-    const g =
-        Number(
-            color.g
-        ) || 0;
-
-
-    const b =
-        Number(
-            color.b
-        ) || 0;
-
-
-    let a = 1;
-
-
-    if (
-        typeof color.a ===
-        "number"
-    ) {
-
-        /*
-         * 7TV Color.a is normally 0-255.
-         *
-         * Some legacy data may use 0-1.
-         */
-
-        a =
-            color.a > 1
-                ? color.a / 255
-                : color.a;
+    if (typeof color.hex === "string") {
+        return hexToRGBA(color.hex, opacity);
     }
 
-
-    a *= opacity;
-
-
-    return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-
-
-// ============================================================
-// Clamp
-// ============================================================
-
-function clamp(
-    value,
-    minimum = 0,
-    maximum = 1
-) {
-
-    const number =
-        Number(
-            value
-        );
-
-
-    if (
-        !Number.isFinite(number)
-    ) {
-
-        return minimum;
-    }
-
-
-    return Math.min(
-        maximum,
-        Math.max(
-            minimum,
-            number
-        )
-    );
-}
-
-
-// ============================================================
-// Gradient Stop
-// ============================================================
-
-function buildGradientStop(
-    stop,
-    opacity = 1
-) {
-
-    const color =
-        colorToRGBA(
-            stop?.color,
-            opacity
-        );
-
-
-    const position =
-        clamp(
-            stop?.at ?? 0
-        ) * 100;
-
-
-    return `${color} ${position}%`;
-}
-
-
-// ============================================================
-// Current 7TV Linear Gradient
-// ============================================================
-
-function buildLinearGradient(
-    gradient,
-    opacity = 1
-) {
-
-    const stops =
-        Array.isArray(
-            gradient?.stops
-        )
-            ? gradient.stops
-                .map(
-                    stop =>
-                        buildGradientStop(
-                            stop,
-                            opacity
-                        )
-                )
-                .join(", ")
-            : "";
-
-
-    const prefix =
-        gradient?.repeating
-            ? "repeating-"
-            : "";
-
-
-    const angle =
-        Number.isFinite(
-            Number(
-                gradient?.angle
-            )
-        )
-            ? Number(
-                gradient.angle
-            )
-            : 0;
-
-
-    return (
-        `${prefix}linear-gradient(` +
-        `${angle}deg, ${stops}` +
-        `)`
-    );
-}
-
-
-// ============================================================
-// Current 7TV Radial Gradient
-// ============================================================
-
-function buildRadialGradient(
-    gradient,
-    opacity = 1
-) {
-
-    const stops =
-        Array.isArray(
-            gradient?.stops
-        )
-            ? gradient.stops
-                .map(
-                    stop =>
-                        buildGradientStop(
-                            stop,
-                            opacity
-                        )
-                )
-                .join(", ")
-            : "";
-
-
-    const prefix =
-        gradient?.repeating
-            ? "repeating-"
-            : "";
-
-
-    const shape =
-        String(
-            gradient?.shape ||
-            "CIRCLE"
-        ).toLowerCase();
-
-
-    return (
-        `${prefix}radial-gradient(` +
-        `${shape}, ${stops}` +
-        `)`
-    );
-}
-
-
-// ============================================================
-// Current 7TV Image Layer
-// ============================================================
-
-function buildImageLayer(
-    layer,
-    opacity = 1
-) {
-
-    const image =
-        layer?.images?.[0];
-
-
-    if (
-        !image?.url
-    ) {
-
-        return null;
-    }
-
+    const r = Number(color.r) || 0;
+    const g = Number(color.g) || 0;
+    const b = Number(color.b) || 0;
 
     /*
-     * Image paints are rendered as a background image.
-     *
-     * Preserve the URL exactly as supplied by 7TV.
+     * 7TV's current Color object stores alpha as 0-255.
+     * Legacy data may already provide a 0-1 alpha.
      */
+    let alpha =
+        typeof color.a === "number"
+            ? color.a > 1
+                ? color.a / 255
+                : color.a
+            : 1;
 
-    return (
-        `url("${String(
-            image.url
-        ).replace(
-            /"/g,
-            '\\"'
-        )}")`
-    );
+    alpha *= clamp(opacity);
+
+    if (alpha >= 0.999) {
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function normalizeStop(stop, opacity = 1) {
+    return `${colorObjectToRGBA(stop?.color, opacity)} ${clamp(stop?.at) * 100}%`;
+}
 
-// ============================================================
-// Current Paint Layer
-// ============================================================
+function buildLinearGradient(layerType, layerOpacity) {
+    const stops = Array.isArray(layerType.stops)
+        ? layerType.stops
+            .map(stop => normalizeStop(stop, layerOpacity))
+            .join(", ")
+        : "";
 
-function buildCurrentLayer(
-    layer
-) {
+    const prefix = layerType.repeating
+        ? "repeating-"
+        : "";
 
-    if (
-        !layer?.ty
-    ) {
+    const angle =
+        typeof layerType.angle === "number"
+            ? layerType.angle
+            : 0;
 
+    return `${prefix}linear-gradient(${angle}deg, ${stops})`;
+}
+
+function buildRadialGradient(layerType, layerOpacity) {
+    const stops = Array.isArray(layerType.stops)
+        ? layerType.stops
+            .map(stop => normalizeStop(stop, layerOpacity))
+            .join(", ")
+        : "";
+
+    const prefix = layerType.repeating
+        ? "repeating-"
+        : "";
+
+    const shape =
+        String(layerType.shape || "CIRCLE").toLowerCase() === "ellipse"
+            ? "ellipse"
+            : "circle";
+
+    return `${prefix}radial-gradient(${shape}, ${stops})`;
+}
+
+function buildImageLayer(layerType, layerOpacity) {
+    const image = Array.isArray(layerType.images)
+        ? layerType.images[0]
+        : null;
+
+    if (!image?.url) {
         return null;
     }
 
+    /*
+     * CSS cannot apply opacity to one background image independently.
+     * For normal 7TV image paints the layer opacity is generally 1.
+     * When opacity is below 1, use an SVG wrapper for static images.
+     * Animated images are left as normal URLs because converting them
+     * would destroy animation.
+     */
+    if (
+        layerOpacity < 0.999 &&
+        Number(image.frameCount || 1) <= 1
+    ) {
+        const escapedUrl = String(image.url)
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "%3C")
+            .replace(/>/g, "%3E");
 
-    const type =
-        layer.ty;
+        const svg =
+            `<svg xmlns="http://www.w3.org/2000/svg" ` +
+            `width="100%" height="100%" viewBox="0 0 100 100">` +
+            `<image href="${escapedUrl}" x="0" y="0" ` +
+            `width="100" height="100" preserveAspectRatio="none" ` +
+            `opacity="${clamp(layerOpacity)}"/>` +
+            `</svg>`;
 
+        return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    }
 
-    const opacity =
-        clamp(
-            layer.opacity ===
-            undefined
+    return `url("${String(image.url).replace(/"/g, '\\"')}")`;
+}
+
+function buildCurrentPaint(paint) {
+    const layers = paint?.data?.layers;
+
+    if (!Array.isArray(layers) || !layers.length) {
+        return null;
+    }
+
+    const backgrounds = [];
+
+    /*
+     * CSS background layers are painted from first -> last, with the
+     * first image being the topmost layer. This matches 7TV's layer
+     * ordering for the paint stack.
+     */
+    for (const layer of layers) {
+        const type = layer?.ty;
+
+        if (!type) {
+            continue;
+        }
+
+        const opacity = clamp(
+            layer.opacity === undefined
                 ? 1
                 : layer.opacity
         );
 
+        let background = null;
 
-    switch (
-        type.__typename
-    ) {
-
-        // ----------------------------------------------------
-        // Solid Color
-        // ----------------------------------------------------
-
-        case "PaintLayerTypeSingleColor": {
-
-            const color =
-                colorToRGBA(
-                    type.color,
-                    opacity
-                );
-
-
-            /*
-             * Use a solid linear gradient so the layer can
-             * participate in the same background stack.
-             */
-
-            return {
-                image:
-                    `linear-gradient(` +
-                    `${color}, ${color}` +
-                    `)`,
-
-                position:
-                    "0% 0%",
-
-                size:
-                    "100% 100%",
-
-                repeat:
-                    "no-repeat"
-            };
-        }
-
-
-        // ----------------------------------------------------
-        // Linear Gradient
-        // ----------------------------------------------------
-
-        case "PaintLayerTypeLinearGradient": {
-
-            return {
-                image:
-                    buildLinearGradient(
-                        type,
-                        opacity
-                    ),
-
-                position:
-                    "0% 0%",
-
+        switch (type.__typename) {
+            case "PaintLayerTypeSingleColor":
                 /*
-                 * 7TV's gradient renderer does not stretch
-                 * every gradient to 100% x 100%.
-                 *
-                 * Cover gives the same visual behavior for
-                 * the current layer format.
+                 * A solid layer is represented as a gradient so it can
+                 * participate in the same background-image stack.
                  */
+                background =
+                    `linear-gradient(` +
+                    `${colorObjectToRGBA(type.color, opacity)}, ` +
+                    `${colorObjectToRGBA(type.color, opacity)}` +
+                    `)`;
+                break;
 
-                size:
-                    "cover",
-
-                repeat:
-                    type.repeating
-                        ? "repeat"
-                        : "no-repeat"
-            };
-        }
-
-
-        // ----------------------------------------------------
-        // Radial Gradient
-        // ----------------------------------------------------
-
-        case "PaintLayerTypeRadialGradient": {
-
-            return {
-                image:
-                    buildRadialGradient(
-                        type,
-                        opacity
-                    ),
-
-                position:
-                    "0% 0%",
-
-                size:
-                    "cover",
-
-                repeat:
-                    type.repeating
-                        ? "repeat"
-                        : "no-repeat"
-            };
-        }
-
-
-        // ----------------------------------------------------
-        // Image
-        // ----------------------------------------------------
-
-        case "PaintLayerTypeImage": {
-
-            const image =
-                buildImageLayer(
+            case "PaintLayerTypeLinearGradient":
+                background = buildLinearGradient(
                     type,
                     opacity
                 );
+                break;
 
+            case "PaintLayerTypeRadialGradient":
+                background = buildRadialGradient(
+                    type,
+                    opacity
+                );
+                break;
 
-            if (!image) {
-                return null;
-            }
+            case "PaintLayerTypeImage":
+                background = buildImageLayer(
+                    type,
+                    opacity
+                );
+                break;
 
-
-            return {
-                image,
-
-                position:
-                    "0% 0%",
-
-                size:
-                    "cover",
-
-                repeat:
-                    "no-repeat"
-            };
+            default:
+                console.warn(
+                    "⚠️ Unsupported 7TV paint layer:",
+                    type.__typename
+                );
+                break;
         }
 
-
-        default:
-
-            console.warn(
-                "⚠️ Unsupported 7TV paint layer:",
-                type.__typename
-            );
-
-
-            return null;
+        if (background) {
+            backgrounds.push(background);
+        }
     }
+
+    if (!backgrounds.length) {
+        return null;
+    }
+
+    const shadow =
+        Array.isArray(paint.data.shadows)
+            ? paint.data.shadows
+                .map(buildShadow)
+                .filter(Boolean)
+                .join(" ")
+            : "";
+
+    return {
+        backgroundColor: "currentColor",
+
+        backgroundImage:
+            backgrounds.join(", "),
+
+        /*
+         * Do NOT force 100% 100%.
+         */
+        backgroundSize:
+            backgrounds.map(() => "auto").join(", "),
+
+        backgroundPosition:
+            backgrounds.map(() => "0% 0%").join(", "),
+
+        backgroundRepeat:
+            backgrounds.map(() => "repeat").join(", "),
+
+        WebkitBackgroundClip: "text",
+        backgroundClip: "text",
+
+        WebkitTextFillColor: "transparent",
+
+        filter:
+            shadow || "none"
+    };
 }
 
-
-// ============================================================
-// Legacy 7TV Gradient
-// ============================================================
-
-function buildLegacyGradient(
-    gradient
-) {
-
+function buildLegacyGradient(gradient) {
     if (!gradient) {
         return null;
     }
 
-
-    const functionName =
+    const fn =
         String(
             gradient.function ||
             "LINEAR_GRADIENT"
         )
             .toLowerCase()
-            .replace(
-                "_",
-                "-"
-            );
+            .replace("_", "-");
 
-
-    // --------------------------------------------------------
-    // Image
-    // --------------------------------------------------------
-
-    if (
-        functionName ===
-        "url"
-    ) {
-
-        if (
-            !gradient.image_url
-        ) {
-
-            return null;
-        }
-
-
-        return {
-            image:
-                `url("${String(
-                    gradient.image_url
-                ).replace(
-                    /"/g,
-                    '\\"'
-                )}")`,
-
-            position:
-                gradient.at?.length === 2
-                    ? `${gradient.at[0] * 100}% ${gradient.at[1] * 100}%`
-                    : "0% 0%",
-
-            size:
-                gradient.size?.length === 2
-                    ? `${gradient.size[0] * 100}% ${gradient.size[1] * 100}%`
-                    : "",
-
-            repeat:
-                gradient.canvas_repeat ||
-                "unset"
-        };
+    if (fn === "url") {
+        return gradient.image_url
+            ? `url("${String(gradient.image_url).replace(/"/g, '\\"')}")`
+            : null;
     }
-
 
     const args = [];
 
-
-    // --------------------------------------------------------
-    // Linear
-    // --------------------------------------------------------
-
-    if (
-        functionName ===
-        "linear-gradient"
-    ) {
-
+    if (fn === "linear-gradient") {
         args.push(
-            `${
-                typeof gradient.angle ===
-                "number"
-                    ? gradient.angle
-                    : 0
-            }deg`
+            `${typeof gradient.angle === "number" ? gradient.angle : 0}deg`
         );
-    }
-
-
-    // --------------------------------------------------------
-    // Radial
-    // --------------------------------------------------------
-
-    if (
-        functionName ===
-        "radial-gradient"
-    ) {
-
+    } else if (fn === "radial-gradient") {
         args.push(
             String(
-                gradient.shape ||
-                "circle"
+                gradient.shape || "circle"
             ).toLowerCase()
         );
     }
 
-
-    // --------------------------------------------------------
-    // Stops
-    // --------------------------------------------------------
-
-    for (
-        const stop of
-        gradient.stops ||
-        []
-    ) {
-
+    for (const stop of gradient.stops || []) {
         args.push(
-            buildGradientStop(
-                stop
-            )
+            `${colorObjectToRGBA(stop.color)} ${clamp(stop.at) * 100}%`
         );
     }
 
+    const prefix = gradient.repeat
+        ? "repeating-"
+        : "";
 
-    const prefix =
-        gradient.repeat
-            ? "repeating-"
-            : "";
-
-
-    return {
-
-        image:
-            `${prefix}${functionName}(` +
-            `${args.join(", ")}` +
-            `)`,
-
-        position:
-            gradient.at?.length === 2
-                ? `${gradient.at[0] * 100}% ${gradient.at[1] * 100}%`
-                : "",
-
-        size:
-            gradient.size?.length === 2
-                ? `${gradient.size[0] * 100}% ${gradient.size[1] * 100}%`
-                : "",
-
-        repeat:
-            gradient.canvas_repeat ||
-            "unset"
-    };
+    return `${prefix}${fn}(${args.join(", ")})`;
 }
 
-
-// ============================================================
-// Paint Shadow
-// ============================================================
-
-function buildShadow(
-    shadow
-) {
-
+function buildShadow(shadow) {
     if (!shadow) {
         return null;
     }
-
-
-    /*
-     * Current 7TV format:
-     *
-     * offsetX
-     * offsetY
-     * blur
-     * color
-     *
-     * Legacy format:
-     *
-     * x_offset
-     * y_offset
-     * radius
-     * color
-     */
 
     const x =
         Number(
@@ -727,14 +351,12 @@ function buildShadow(
             0
         );
 
-
     const y =
         Number(
             shadow.offsetY ??
             shadow.y_offset ??
             0
         );
-
 
     const blur =
         Number(
@@ -743,435 +365,158 @@ function buildShadow(
             0
         );
 
-
-    return (
-        `drop-shadow(` +
-        `${x}px ` +
-        `${y}px ` +
-        `${blur}px ` +
-        `${colorToRGBA(
-            shadow.color
-        )}` +
-        `)`
-    );
+    return `drop-shadow(` +
+        `${x}px ${y}px ${blur}px ` +
+        `${colorObjectToRGBA(shadow.color)}` +
+        `)`;
 }
 
+function buildLegacyPaint(paint) {
+    const gradients =
+        paint?.data?.gradients;
 
-// ============================================================
-// Build Paint
-// ============================================================
-
-function buildPaint(
-    paint
-) {
-
-    console.log(
-        "🎨 7TV Paint received:",
-        paint
-    );
-
-
-    if (!paint) {
-
-        console.log(
-            "❌ No 7TV paint object."
-        );
-
-
+    if (!Array.isArray(gradients) || !gradients.length) {
         return null;
     }
 
-
-    const data =
-        paint.data;
-
-
-    if (!data) {
-
-        console.log(
-            "❌ Paint has no data."
-        );
-
-
-        return null;
-    }
-
-
-    console.log(
-        "📦 7TV Paint data:",
-        data
-    );
-
-
-    const backgrounds = [];
+    const backgroundImages = [];
     const positions = [];
     const sizes = [];
     const repeats = [];
 
+    for (const gradient of gradients) {
+        const image =
+            buildLegacyGradient(gradient);
 
-    // ========================================================
-    // Current 7TV PaintData
-    // ========================================================
-
-    if (
-        Array.isArray(
-            data.layers
-        ) &&
-        data.layers.length
-    ) {
-
-        for (
-            const layer of
-            data.layers
-        ) {
-
-            const result =
-                buildCurrentLayer(
-                    layer
-                );
-
-
-            if (!result) {
-                continue;
-            }
-
-
-            backgrounds.push(
-                result.image
-            );
-
-
-            positions.push(
-                result.position
-            );
-
-
-            sizes.push(
-                result.size
-            );
-
-
-            repeats.push(
-                result.repeat
-            );
+        if (!image) {
+            continue;
         }
-    }
 
+        backgroundImages.push(image);
 
-    // ========================================================
-    // Legacy 7TV PaintData
-    // ========================================================
-
-    else if (
-        Array.isArray(
-            data.gradients
-        ) &&
-        data.gradients.length
-    ) {
-
-        for (
-            const gradient of
-            data.gradients
-        ) {
-
-            const result =
-                buildLegacyGradient(
-                    gradient
-                );
-
-
-            if (!result) {
-                continue;
-            }
-
-
-            backgrounds.push(
-                result.image
-            );
-
-
-            positions.push(
-                result.position
-            );
-
-
-            sizes.push(
-                result.size
-            );
-
-
-            repeats.push(
-                result.repeat
-            );
-        }
-    }
-
-
-    // ========================================================
-    // Legacy single-gradient fallback
-    // ========================================================
-
-    else if (
-        data.function
-    ) {
-
-        const gradient = {
-            function:
-                data.function,
-
-            canvas_repeat:
-                data.canvas_repeat ||
-                "",
-
-            size:
-                data.size ||
-                [1, 1],
-
-            shape:
-                data.shape,
-
-            image_url:
-                data.image_url,
-
-            stops:
-                data.stops ||
-                [],
-
-            repeat:
-                data.repeat ||
-                false,
-
-            angle:
-                data.angle,
-
-            at:
-                data.at
-        };
-
-
-        const result =
-            buildLegacyGradient(
-                gradient
-            );
-
-
-        if (result) {
-
-            backgrounds.push(
-                result.image
-            );
-
-
-            positions.push(
-                result.position
-            );
-
-
-            sizes.push(
-                result.size
-            );
-
-
-            repeats.push(
-                result.repeat
-            );
-        }
-    }
-
-
-    // ========================================================
-    // Nothing Renderable
-    // ========================================================
-
-    if (
-        !backgrounds.length
-    ) {
-
-        console.warn(
-            "⚠️ 7TV paint contains no renderable layers."
+        positions.push(
+            gradient.at?.length === 2
+                ? `${gradient.at[0] * 100}% ${gradient.at[1] * 100}%`
+                : "0% 0%"
         );
 
+        sizes.push(
+            gradient.size?.length === 2
+                ? `${gradient.size[0] * 100}% ${gradient.size[1] * 100}%`
+                : "auto"
+        );
 
+        repeats.push(
+            gradient.canvas_repeat || "unset"
+        );
+    }
+
+    if (!backgroundImages.length) {
         return null;
     }
 
-
-    // ========================================================
-    // Drop Shadows
-    // ========================================================
-
-    const filters =
-        Array.isArray(
-            data.shadows
-        )
-            ? data.shadows
-                .map(
-                    buildShadow
-                )
-                .filter(
-                    Boolean
-                )
+    const filter =
+        Array.isArray(paint.data.shadows)
+            ? paint.data.shadows
+                .map(buildShadow)
+                .filter(Boolean)
                 .join(" ")
             : "";
 
-
-    // ========================================================
-    // Text Effects
-    // ========================================================
-
-    const text =
-        data.text;
-
-
     const style = {
+        backgroundColor: "currentColor",
 
-    backgroundImage:
-        backgrounds.join(", "),
+        backgroundImage:
+            backgroundImages.join(", "),
 
-    backgroundPosition:
-        positions.join(", "),
+        backgroundPosition:
+            positions.join(", "),
 
-    backgroundSize:
-        sizes.join(", "),
+        backgroundSize:
+            sizes.join(", "),
 
-    backgroundRepeat:
-        repeats.join(", "),
+        backgroundRepeat:
+            repeats.join(", "),
 
-    WebkitBackgroundClip:
-        "text",
+        WebkitBackgroundClip: "text",
+        backgroundClip: "text",
 
-    backgroundClip:
-        "text",
+        WebkitTextFillColor: "transparent",
 
-    WebkitTextFillColor:
-        "transparent",
+        filter:
+            filter || "none"
+    };
 
-    color:
-        "transparent",
+    if (paint.data.color) {
+        style.color =
+            colorObjectToRGBA(
+                paint.data.color
+            );
+    }
 
-    filter:
-        filters || "none"
-};
+    if (paint.data.text) {
+        const text = paint.data.text;
 
-    // ========================================================
-    // Text Styling
-    // ========================================================
-
-    if (
-        text
-    ) {
-
-        // ----------------------------------------------------
-        // Font Weight
-        // ----------------------------------------------------
-
-        if (
-            text.weight !==
-            undefined
-        ) {
-
+        if (text.weight) {
             style.fontWeight =
-                Number(
-                    text.weight
-                ) * 100;
+                Number(text.weight) * 100;
         }
 
-
-        // ----------------------------------------------------
-        // Text Stroke
-        // ----------------------------------------------------
-
-        if (
-            text.stroke
-        ) {
-
+        if (text.stroke) {
             style.WebkitTextStrokeWidth =
-                `${Number(
-                    text.stroke.width
-                ) || 0}px`;
-
+                `${Number(text.stroke.width) || 0}px`;
 
             style.WebkitTextStrokeColor =
-                colorToRGBA(
+                colorObjectToRGBA(
                     text.stroke.color
                 );
         }
 
-
-        // ----------------------------------------------------
-        // Text Shadows
-        // ----------------------------------------------------
-
-        if (
-            Array.isArray(
-                text.shadows
-            )
-        ) {
-
+        if (Array.isArray(text.shadows)) {
             style.textShadow =
                 text.shadows
-                    .map(
-                        shadow => {
-
-                            const x =
-                                Number(
-                                    shadow.x_offset
-                                ) || 0;
-
-
-                            const y =
-                                Number(
-                                    shadow.y_offset
-                                ) || 0;
-
-
-                            const radius =
-                                Number(
-                                    shadow.radius
-                                ) || 0;
-
-
-                            return (
-                                `${x}px ` +
-                                `${y}px ` +
-                                `${radius}px ` +
-                                `${colorToRGBA(
-                                    shadow.color
-                                )}`
-                            );
-                        }
+                    .map(shadow =>
+                        `${Number(shadow.x_offset) || 0}px ` +
+                        `${Number(shadow.y_offset) || 0}px ` +
+                        `${Number(shadow.radius) || 0}px ` +
+                        `${colorObjectToRGBA(shadow.color)}`
                     )
                     .join(", ");
         }
 
-
-        // ----------------------------------------------------
-        // Text Transform
-        // ----------------------------------------------------
-
-        if (
-            text.transform
-        ) {
-
+        if (text.transform) {
             style.textTransform =
                 text.transform;
         }
     }
 
+    return style;
+}
 
-    console.log(
-        "✅ Generated 7TV-compatible paint style:",
-        style
-    );
+function buildPaint(paint) {
+    if (!paint) {
+        return null;
+    }
 
+    /*
+     * Prefer current 7TV GraphQL PaintData.
+     * Fall back to legacy gradients.
+     */
+    const style =
+        Array.isArray(paint?.data?.layers)
+            ? buildCurrentPaint(paint)
+            : buildLegacyPaint(paint);
+
+    if (!style) {
+        console.warn(
+            "⚠️ 7TV paint contained no renderable layers:",
+            paint
+        );
+
+        return null;
+    }
 
     return style;
 }
 
-
-// ============================================================
-// Export
-// ============================================================
-
-window.buildPaint =
-    buildPaint;
+window.buildPaint = buildPaint;
