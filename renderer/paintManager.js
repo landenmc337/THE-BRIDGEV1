@@ -1025,47 +1025,33 @@ function buildPaint(
 
     const style = {
 
-        /*
-         * 7TV uses the paint as a background clipped
-         * into the text.
-         */
+    backgroundImage:
+        backgrounds.join(", "),
 
-        backgroundColor:
-            "currentColor",
+    backgroundPosition:
+        positions.join(", "),
 
+    backgroundSize:
+        sizes.join(", "),
 
-        backgroundImage:
-            backgrounds.join(", "),
+    backgroundRepeat:
+        repeats.join(", "),
 
+    WebkitBackgroundClip:
+        "text",
 
-        backgroundPosition:
-            positions.join(", "),
+    backgroundClip:
+        "text",
 
+    WebkitTextFillColor:
+        "transparent",
 
-        backgroundSize:
-            sizes.join(", "),
+    color:
+        "transparent",
 
-
-        backgroundRepeat:
-            repeats.join(", "),
-
-
-        WebkitBackgroundClip:
-            "text",
-
-
-        backgroundClip:
-            "text",
-
-
-        WebkitTextFillColor:
-            "transparent",
-
-
-        filter:
-            filters ||
-            "inherit"
-    };
+    filter:
+        filters || "none"
+};
 
 
     // ========================================================

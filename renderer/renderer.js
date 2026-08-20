@@ -138,10 +138,15 @@ function createUsername(data) {
      * The paint renderer receives the complete 7TV paint object.
      * paintManager.js converts the PaintData layers into CSS.
      */
+    const paint =
+        data.sevenTV?.paint;
+
+
     const style =
-        window.buildPaint
+        window.buildPaint &&
+        paint
             ? window.buildPaint(
-                data.sevenTV?.paint
+                paint
             )
             : null;
 
@@ -168,8 +173,9 @@ function createUsername(data) {
     /*
      * Normal username color remains the fallback.
      *
-     * If a 7TV paint exists, the paint's
-     * background-clip/text-fill properties take over.
+     * When a 7TV paint exists, the text itself must be
+     * transparent so the background gradient can be clipped
+     * into the glyphs.
      */
     const usernameColor =
         data.color ||
@@ -179,7 +185,18 @@ function createUsername(data) {
 
 
     const colorStyle =
-        `color:${usernameColor};`;
+        style
+            ? `
+                color:transparent !important;
+                -webkit-text-fill-color:transparent !important;
+                -webkit-background-clip:text !important;
+                background-clip:text !important;
+                display:inline-block;
+                ${css}
+            `
+            : `
+                color:${usernameColor};
+            `;
 
 
     /*
@@ -196,9 +213,9 @@ function createUsername(data) {
 
 
     const paintId =
-        data.sevenTV?.paint?.id
+        paint?.id
             ? String(
-                data.sevenTV.paint.id
+                paint.id
             ).replace(
                 /"/g,
                 "&quot;"
@@ -216,7 +233,7 @@ function createUsername(data) {
         <span
             class="username${paintClass}"
             ${paintAttribute}
-            style="${colorStyle}${css}"
+            style="${colorStyle}"
         >
             ${data.username}:
         </span>
