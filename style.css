@@ -257,8 +257,8 @@ body {
 .seventv-emote {
     display: inline-block !important;
 
-    width: var(--emote-size) !important;
-    height: var(--emote-size) !important;
+    width: var(44px) !important;
+    height: var(44px) !important;
 
     vertical-align: middle;
     object-fit: contain;
