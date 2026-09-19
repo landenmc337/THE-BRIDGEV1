@@ -382,6 +382,12 @@ function addMessage(data) {
     // ========================================
     // Twitch deleted message
     // ========================================
+    //
+    // Twitch sends a "message_deleted"
+    // event containing the original Twitch
+    // message ID. Find the matching DOM
+    // element and remove it.
+    // ========================================
 
     if (
         data.type === "message_deleted"
@@ -418,8 +424,7 @@ function addMessage(data) {
 
                     const messageId =
                         String(
-                            message.dataset.messageId ||
-                            ""
+                            message.dataset.messageId || ""
                         );
 
 
@@ -580,6 +585,11 @@ function addMessage(data) {
 
     // ========================================
     // Store Twitch message ID
+    // ========================================
+    //
+    // This MUST match the ID sent by Twitch
+    // so a later message_deleted event can
+    // find this exact message.
     // ========================================
 
     if (data.messageId) {

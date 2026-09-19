@@ -2054,7 +2054,21 @@ if (broadcasterId) {
                 userId:
                     data.userId ||
                     "",
+                userId:
+                    data.userId ||
+                    "",
 
+                messageId:
+                    data.messageId ||
+                    "",
+
+                sevenTV:
+                    data.sevenTV || {
+                        paint: null,
+                        badge: null,
+                        effects: [],
+                        raw: null
+                    },
                 sevenTV:
                     data.sevenTV || {
                         paint: null,
