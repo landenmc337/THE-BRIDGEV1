@@ -380,6 +380,65 @@ function addMessage(data) {
 
 
     // ========================================
+    // Twitch deleted message
+    // ========================================
+
+    if (
+        data.type === "message_deleted"
+    ) {
+
+        const deletedMessageId =
+            String(
+                data.messageId || ""
+            );
+
+
+        if (!deletedMessageId) {
+
+            console.warn(
+                "⚠️ Deleted Twitch message had no message ID."
+            );
+
+            return;
+        }
+
+
+        console.log(
+            "🗑️ Removing deleted Twitch message:",
+            deletedMessageId
+        );
+
+
+        chat
+            .querySelectorAll(
+                ".message"
+            )
+            .forEach(
+                message => {
+
+                    const messageId =
+                        String(
+                            message.dataset.messageId ||
+                            ""
+                        );
+
+
+                    if (
+                        messageId ===
+                        deletedMessageId
+                    ) {
+
+                        message.remove();
+                    }
+                }
+            );
+
+
+        return;
+    }
+
+
+    // ========================================
     // Twitch timeout control message
     // ========================================
 
@@ -517,6 +576,19 @@ function addMessage(data) {
 
     message.className =
         `message layout-${layoutName} new-message`;
+
+
+    // ========================================
+    // Store Twitch message ID
+    // ========================================
+
+    if (data.messageId) {
+
+        message.dataset.messageId =
+            String(
+                data.messageId
+            );
+    }
 
 
     // ========================================

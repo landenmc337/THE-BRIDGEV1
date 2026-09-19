@@ -497,6 +497,58 @@ function registerEvents(
 
 
     // ============================================
+    // Twitch deleted message
+    // ============================================
+
+    client.on(
+        "messagedeleted",
+        (
+            channel,
+            username,
+            deletedMessage,
+            userstate
+        ) => {
+
+            const messageId =
+                userstate?.["target-msg-id"] ||
+                "";
+
+            if (!messageId) {
+
+                console.warn(
+                    `⚠️ [${account.login}] Deleted Twitch message had no message ID.`
+                );
+
+                return;
+            }
+
+            console.log(
+                `🗑️ [${account.login}] Twitch message deleted:`,
+                {
+                    username,
+                    messageId
+                }
+            );
+
+            bridge.send({
+
+                type:
+                    "message_deleted",
+
+                platform:
+                    "twitch",
+
+                overlayId:
+                    account.overlayId,
+
+                messageId
+
+            });
+        }
+    );
+
+
+    // ============================================
     // Twitch chat messages
     // ============================================
 
@@ -604,6 +656,13 @@ function registerEvents(
 
                 overlayId:
                     account.overlayId,
+
+                // ====================================
+                // Twitch message ID
+                // ====================================
+
+                messageId:
+                    tags.id || "",
 
                 username:
                     tags["display-name"],

@@ -256,15 +256,12 @@ body {
 
 .seventv-emote {
     display: inline-block !important;
-
-    width: var(44px) !important;
-    height: var(44px) !important;
-
-    vertical-align: middle;
-    object-fit: contain;
-
-    margin-top: -12px;
-    margin-bottom: -12px;
+    width: 66px !important;
+    height: 66px !important;
+    min-width: 66px !important;
+    vertical-align: middle !important;
+    object-fit: contain !important;
+    margin: 0 4px !important;
 }
 
 .bubble {
