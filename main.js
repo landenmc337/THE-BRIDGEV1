@@ -1,10 +1,11 @@
-console.log("✅ main.js loaded");
 
-const root = document.documentElement;
+console.log("✅ main.js loaded");
 
 // ===============================
 // Appearance Settings
 // ===============================
+
+const root = document.documentElement;
 
 const liveFont =
     RelaySettings.font === "Segoe UI (Chatterino)"
@@ -19,8 +20,7 @@ console.log("🎨 Live font:", RelaySettings.font);
 
 console.log(
     "🎨 CSS font:",
-    getComputedStyle(document.documentElement)
-        .getPropertyValue("--chat-font")
+    getComputedStyle(root).getPropertyValue("--chat-font")
 );
 
 root.style.setProperty(
@@ -43,10 +43,7 @@ root.style.setProperty(
     `${RelaySettings.emoteSize}px`
 );
 
-root.style.setProperty(
-    "--bubble-color",
-    RelaySettings.bubbleColor
-);
+root.style.setProperty("--bubble-color", RelaySettings.bubbleColor);
 
 root.style.setProperty(
     "--show-platform-icons",
@@ -100,11 +97,7 @@ switch (RelaySettings.theme) {
             "rgba(0,255,255,.12)"
         );
 
-        root.style.setProperty(
-            "--message-border",
-            "1px solid cyan"
-        );
-
+        root.style.setProperty("--message-border", "1px solid cyan");
         root.style.setProperty("--message-radius", "16px");
         root.style.setProperty("--shadow-color", "cyan");
         root.style.setProperty("--shadow-blur", "20px");
@@ -116,11 +109,7 @@ switch (RelaySettings.theme) {
             "rgba(255,0,0,.15)"
         );
 
-        root.style.setProperty(
-            "--message-border",
-            "1px solid red"
-        );
-
+        root.style.setProperty("--message-border", "1px solid red");
         root.style.setProperty("--message-radius", "16px");
         root.style.setProperty("--shadow-color", "red");
         root.style.setProperty("--shadow-blur", "20px");
@@ -152,15 +141,28 @@ if (RelaySettings.align === "right") {
 
 // ===============================
 // Overlay ID
+// Supports query parameter and path
 // ===============================
 
-const urlParams = new URLSearchParams(window.location.search);
-const overlayId = urlParams.get("overlayId");
+const currentUrl = new URL(window.location.href);
+const urlParams = currentUrl.searchParams;
+const pathParts = currentUrl.pathname.split("/").filter(Boolean);
+
+const pathOverlayId =
+    pathParts[0] === "overlay" && pathParts[1]
+        ? pathParts[1]
+        : null;
+
+const overlayId =
+    urlParams.get("overlayId") ||
+    pathOverlayId;
 
 console.log("🎯 Overlay ID:", overlayId || "none");
 
 if (!overlayId) {
-    console.warn("⚠️ No overlayId provided in URL.");
+    console.error(
+        "❌ No overlay ID found. Expected ?overlayId=ID or /overlay/ID."
+    );
 }
 
 // ===============================
@@ -169,14 +171,37 @@ if (!overlayId) {
 // ===============================
 
 const protocol =
-    location.protocol === "https:" ? "wss:" : "ws:";
+    currentUrl.protocol === "https:" ? "wss:" : "ws:";
 
-const host = location.host;
-const pathname = window.location.pathname;
+// Keep the existing host and route.
+// Do not append a duplicate overlay ID when it
+// is already included in the URL path.
 
-const socketUrl =
-    `${protocol}//${host}${pathname}` +
-    `${overlayId ? `?overlayId=${encodeURIComponent(overlayId)}` : ""}`;
+const host = currentUrl.host;
+const pathname = currentUrl.pathname;
+
+const socketUrl = (() => {
+    const wsUrl = new URL(
+        `${protocol}//${host}${pathname}`
+    );
+
+    // Preserve other query parameters, if present.
+    currentUrl.searchParams.forEach((value, key) => {
+        wsUrl.searchParams.append(key, value);
+    });
+
+    // Add the ID only when it was not already in the path
+    // and was not supplied as a query parameter.
+    if (
+        overlayId &&
+        !pathOverlayId &&
+        !wsUrl.searchParams.has("overlayId")
+    ) {
+        wsUrl.searchParams.set("overlayId", overlayId);
+    }
+
+    return wsUrl.toString();
+})();
 
 console.log("🔌 WebSocket URL:", socketUrl);
 
@@ -189,6 +214,10 @@ let initLoadInProgress = false;
 const MIN_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 30000;
 
+// ===============================
+// Reconnection
+// ===============================
+
 function scheduleReconnect() {
     if (manuallyStopped || reconnectTimer !== null) {
         return;
@@ -200,6 +229,7 @@ function scheduleReconnect() {
     );
 
     const jitter = Math.floor(Math.random() * 500);
+
     const delay = Math.min(
         baseDelay + jitter,
         MAX_RECONNECT_DELAY
@@ -242,9 +272,7 @@ async function handleInit(data) {
 
             console.log(
                 "7TV emotes loaded:",
-                Object.keys(
-                    SevenTVManager.emotes || {}
-                ).length
+                Object.keys(SevenTVManager.emotes || {}).length
             );
         }
 
@@ -285,6 +313,13 @@ function connectWebSocket() {
         return;
     }
 
+    if (!overlayId) {
+        console.error(
+            "❌ Cannot connect: overlay ID is missing."
+        );
+        return;
+    }
+
     if (
         socket &&
         (
@@ -306,6 +341,7 @@ function connectWebSocket() {
             error
         );
 
+        socket = null;
         scheduleReconnect();
         return;
     }
@@ -381,7 +417,6 @@ function connectWebSocket() {
         );
 
         socket = null;
-
         scheduleReconnect();
     };
 
@@ -399,8 +434,8 @@ function connectWebSocket() {
             error
         );
 
-        // Close the errored connection so the
-        // normal close handler can reconnect.
+        // Closing the connection triggers onclose,
+        // which schedules the next reconnection.
 
         try {
             if (
@@ -416,4 +451,16 @@ function connectWebSocket() {
             );
         }
     };
+}
+
+// ===============================
+// Start Overlay Connection
+// ===============================
+
+if (overlayId) {
+    connectWebSocket();
+} else {
+    console.error(
+        "❌ WebSocket connection was not started because the overlay ID is missing."
+    );
 }
