@@ -316,3 +316,38 @@ body {
 .compact {
     gap: 5px;
 }
+/* ============================================
+   Twitch Tier 2 / Tier 3 Oversized GIFs
+   ============================================ */
+
+.twitch-gif-container {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin: 4px 2px;
+    max-width: 100%;
+}
+
+.twitch-gif-link {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.twitch-oversized-gif {
+    display: block;
+    width: 220px;
+    max-width: 100%;
+    height: auto;
+    max-height: 220px;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.message-content {
+    overflow-wrap: anywhere;
+}
+
+.text {
+    display: inline;
+}

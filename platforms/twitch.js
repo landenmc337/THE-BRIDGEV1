@@ -682,6 +682,10 @@ function registerEvents(
                 emotes:
                     tags.emotes || {},
 
+                // Twitch Tier 2 / Tier 3 oversized GIF metadata
+                gifs:
+                    tags.gifs || "",
+
                 channelId:
                     account.userId || "",
 

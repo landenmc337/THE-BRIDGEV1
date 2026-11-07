@@ -297,6 +297,105 @@ function createText(data) {
 
 
     // ========================================
+    // Twitch Tier 2 / Tier 3 Oversized GIFs
+    // ========================================
+
+    if (
+        data.platform === "twitch" &&
+        data.gifs
+    ) {
+
+        const gifTag =
+            Array.isArray(data.gifs)
+                ? data.gifs.join(",")
+                : String(data.gifs);
+
+        const gifEntries =
+            gifTag.split(",").map(entry => {
+
+                const parts = entry.split("|");
+
+                if (parts.length < 3) {
+                    return null;
+                }
+
+                const range =
+                    parts[0].split("-");
+
+                const start =
+                    Number(range[0]);
+
+                const end =
+                    Number(range[1]);
+
+                const gifId =
+                    parts[1];
+
+                const gifUrl =
+                    parts.slice(2).join("|");
+
+                if (
+                    !Number.isInteger(start) ||
+                    !Number.isInteger(end) ||
+                    start < 0 ||
+                    end < start ||
+                    !gifId ||
+                    !gifUrl
+                ) {
+                    return null;
+                }
+
+                return {
+                    start,
+                    end,
+                    gifId,
+                    gifUrl
+                };
+            }).filter(Boolean);
+
+        // Twitch supplies inclusive zero-based ranges.
+        // The full GIF URL must be used unchanged.
+        for (const gif of gifEntries) {
+
+            const caption =
+                String(data.text || "").slice(
+                    gif.start,
+                    gif.end + 1
+                );
+
+            if (!caption) continue;
+
+            const safeUrl =
+                gif.gifUrl.replace(/"/g, "&quot;");
+
+            const gifHtml = `
+                <img
+                    class="twitch-oversized-gif"
+                    src="${safeUrl}"
+                    alt="${caption.replace(/</g, "&lt;").replace(/>/g, "&gt;")}"
+                    title="${caption.replace(/</g, "&lt;").replace(/>/g, "&gt;")}"
+                    loading="eager"
+                >
+            `;
+
+            // Replace the caption in rendered HTML, not the URL.
+            const captionIndex =
+                html.indexOf(caption);
+
+            if (captionIndex !== -1) {
+
+                html =
+                    html.slice(0, captionIndex) +
+                    gifHtml +
+                    html.slice(
+                        captionIndex + caption.length
+                    );
+            }
+        }
+    }
+
+
+    // ========================================
     // Deeno4k Custom Message Color
     // ========================================
 
@@ -381,12 +480,6 @@ function addMessage(data) {
 
     // ========================================
     // Twitch deleted message
-    // ========================================
-    //
-    // Twitch sends a "message_deleted"
-    // event containing the original Twitch
-    // message ID. Find the matching DOM
-    // element and remove it.
     // ========================================
 
     if (
@@ -517,14 +610,6 @@ function addMessage(data) {
     // ========================================
     // Hidden Bot Filter
     // ========================================
-    //
-    // Empty list = show ALL bots.
-    //
-    // Example:
-    // hiddenBots=nightbot,moobot
-    //
-    // Only those usernames are hidden.
-    // ========================================
 
     const messageUsername =
         String(
@@ -585,11 +670,6 @@ function addMessage(data) {
 
     // ========================================
     // Store Twitch message ID
-    // ========================================
-    //
-    // This MUST match the ID sent by Twitch
-    // so a later message_deleted event can
-    // find this exact message.
     // ========================================
 
     if (data.messageId) {
