@@ -1,247 +1,719 @@
+const tmi = require("tmi.js");
+const axios = require("axios");
+const bridge = require("../bridge");
+const SevenTVCosmetics = require("../managers/sevenTVCosmetics");
+const config = require("../config");
+const { downloadBadges } = require("../assetDownloader");
+const Account = require("../data/account");
+
 require("dotenv").config();
 
-const crypto = require("crypto");
-const axios = require("axios");
+const clients = new Map();
 
+// Twitch users currently timed out on each overlay.
+const timedOutUsers = new Map();
 
-// ============================================================
-// Create Signed OAuth State
-// ============================================================
+function rememberTimedOutUser(overlayId, userId, username, duration) {
+    if (!overlayId) return;
 
-function createState(login = null) {
+    if (!timedOutUsers.has(overlayId)) {
+        timedOutUsers.set(overlayId, new Map());
+    }
 
-    const payload = {
+    const users = timedOutUsers.get(overlayId);
 
-        nonce:
-            crypto.randomBytes(32).toString("hex"),
+    const key = String(
+        userId || username || ""
+    ).toLowerCase();
 
-        login:
-            login || null,
+    if (!key) return;
 
-        createdAt:
-            Date.now()
+    const seconds = Number(duration);
 
-    };
+    const expiresAt =
+        Number.isFinite(seconds) && seconds > 0
+            ? Date.now() + seconds * 1000
+            : Infinity;
 
-
-    const data =
-        Buffer
-            .from(
-                JSON.stringify(payload)
-            )
-            .toString("base64url");
-
-
-    const signature =
-        crypto
-            .createHmac(
-                "sha256",
-                process.env.TWITCH_CLIENT_SECRET
-            )
-            .update(data)
-            .digest("base64url");
-
-
-    return `${data}.${signature}`;
+    users.set(key, expiresAt);
 }
 
-
-// ============================================================
-// Build Twitch Login URL
-// ============================================================
-
-function buildLoginURL(login = null) {
-
-    const state =
-        createState(login);
-
-
-    const params =
-        new URLSearchParams({
-
-            client_id:
-                process.env.TWITCH_CLIENT_ID,
-
-            redirect_uri:
-                process.env.TWITCH_REDIRECT_URI,
-
-            response_type:
-                "code",
-
-            scope:
-                "chat:read chat:edit user:read:email",
-
-            force_verify:
-                "false",
-
-            state
-
-        });
-
-
-    return {
-
-        state,
-
-        url:
-            "https://id.twitch.tv/oauth2/authorize?" +
-            params.toString()
-
-    };
-}
-
-
-// ============================================================
-// Decode + Verify OAuth State
-// ============================================================
-
-function decodeState(state) {
-
-    if (!state) {
-        return null;
-    }
-
-
-    const parts =
-        state.split(".");
-
-
-    if (parts.length !== 2) {
-        return null;
-    }
-
-
-    const [
-        data,
-        signature
-    ] = parts;
-
-
-    const expectedSignature =
-        crypto
-            .createHmac(
-                "sha256",
-                process.env.TWITCH_CLIENT_SECRET
-            )
-            .update(data)
-            .digest("base64url");
-
-
-    if (
-        signature.length !==
-        expectedSignature.length
-    ) {
-        return null;
-    }
-
-
-    const signaturesMatch =
-        crypto.timingSafeEqual(
-            Buffer.from(signature),
-            Buffer.from(expectedSignature)
+function isUserTimedOut(
+    overlayId,
+    userId,
+    username
+) {
+    const users =
+        timedOutUsers.get(
+            overlayId
         );
 
+    if (!users) return false;
 
-    if (!signaturesMatch) {
-        return null;
-    }
+    const keys = [
+        userId,
+        username
+    ]
+        .filter(Boolean)
+        .map(value =>
+            String(value).toLowerCase()
+        );
 
+    for (const key of keys) {
+        const expiresAt =
+            users.get(key);
 
-    try {
-
-        const stateData =
-            JSON.parse(
-                Buffer
-                    .from(
-                        data,
-                        "base64url"
-                    )
-                    .toString("utf8")
-            );
-
-
-        const createdAt =
-            Number(
-                stateData.createdAt
-            );
-
-
-        const TEN_MINUTES =
-            10 * 60 * 1000;
-
+        if (!expiresAt) continue;
 
         if (
-            !Number.isFinite(createdAt) ||
-            Date.now() - createdAt > TEN_MINUTES ||
-            Date.now() - createdAt < 0
+            expiresAt !== Infinity &&
+            expiresAt <= Date.now()
         ) {
-
-            console.warn(
-                "⚠️ Twitch OAuth state expired."
-            );
-
-            return null;
+            users.delete(key);
+            continue;
         }
 
-
-        return stateData;
-
-
-    } catch {
-
-        return null;
-
+        return true;
     }
 
+    return false;
 }
 
+function sendTimeoutToOverlay(
+    account,
+    username,
+    userId
+) {
+    bridge.send({
+        type: "timeout",
+        platform: "twitch",
+        overlayId: account.overlayId,
+        username: username || "",
+        userId: userId || "",
+        text: "",
+        badges: {},
+        emotes: {}
+    });
+}
 
-// ============================================================
-// Exchange Authorization Code
-// ============================================================
-
-async function exchangeCode(code) {
-
-    const response =
-        await axios.post(
-            "https://id.twitch.tv/oauth2/token",
-            null,
+async function getValidAccessToken(account) {
+    try {
+        await axios.get(
+            "https://id.twitch.tv/oauth2/validate",
             {
-                params: {
-
-                    client_id:
-                        process.env.TWITCH_CLIENT_ID,
-
-                    client_secret:
-                        process.env.TWITCH_CLIENT_SECRET,
-
-                    code,
-
-                    grant_type:
-                        "authorization_code",
-
-                    redirect_uri:
-                        process.env.TWITCH_REDIRECT_URI
-
+                headers: {
+                    Authorization:
+                        `OAuth ${account.accessToken}`
                 }
             }
         );
 
+        console.log(
+            `🔐 Twitch token valid: ${account.login}`
+        );
 
-    return response.data;
+        return account.accessToken;
+
+    } catch (err) {
+        console.log(
+            `♻️ Twitch token expired/invalid: ${account.login}`
+        );
+
+        if (!account.refreshToken) {
+            throw new Error(
+                `No refresh token available for ${account.login}`
+            );
+        }
+
+        const response =
+            await axios.post(
+                "https://id.twitch.tv/oauth2/token",
+                null,
+                {
+                    params: {
+                        client_id:
+                            process.env.TWITCH_CLIENT_ID,
+
+                        client_secret:
+                            process.env.TWITCH_CLIENT_SECRET,
+
+                        grant_type:
+                            "refresh_token",
+
+                        refresh_token:
+                            account.refreshToken
+                    }
+                }
+            );
+
+        const tokens =
+            response.data;
+
+        await Account.save({
+            ...account,
+
+            accessToken:
+                tokens.access_token,
+
+            refreshToken:
+                tokens.refresh_token ||
+                account.refreshToken,
+
+            connectedAt:
+                Date.now()
+        });
+
+        account.accessToken =
+            tokens.access_token;
+
+        account.refreshToken =
+            tokens.refresh_token ||
+            account.refreshToken;
+
+        console.log(
+            `✅ Twitch token refreshed: ${account.login}`
+        );
+
+        return account.accessToken;
+    }
 }
 
+async function initialize() {
+    console.log(
+        "🔄 Twitch initialization starting..."
+    );
 
-// ============================================================
-// Exports
-// ============================================================
+    try {
+        console.log(
+            "🔍 Loading Twitch accounts from database..."
+        );
+
+        const accounts =
+            await Account.loadAll();
+
+        console.log(
+            `📋 Found ${accounts.length} Twitch account(s).`
+        );
+
+        if (!accounts.length) {
+            console.error(
+                "❌ No Twitch accounts connected."
+            );
+
+            return;
+        }
+
+        for (const account of accounts) {
+            if (
+                clients.has(
+                    account.overlayId
+                )
+            ) {
+                console.log(
+                    `⏭️ Already connected: ${account.login}`
+                );
+
+                continue;
+            }
+
+            await connectAccount(
+                account
+            );
+        }
+
+    } catch (err) {
+        console.error(
+            "❌ Twitch initialization failed:",
+            err
+        );
+    }
+}
+
+async function connectAccount(account) {
+    console.log(
+        `🔌 Connecting Twitch account: ${account.login}`
+    );
+
+    try {
+        const accessToken =
+            await getValidAccessToken(
+                account
+            );
+
+        const client =
+            new tmi.Client({
+                identity: {
+                    username:
+                        account.login,
+
+                    password:
+                        `oauth:${accessToken}`
+                },
+
+                channels: [
+                    account.login
+                ]
+            });
+
+        clients.set(
+            account.overlayId,
+            {
+                client,
+                account
+            }
+        );
+
+        registerEvents(
+            client,
+            account
+        );
+
+        console.log(
+            `🔗 Calling Twitch connect for ${account.login}...`
+        );
+
+        await client.connect();
+
+        console.log(
+            `✅ Twitch connection established: ${account.login}`
+        );
+
+    } catch (err) {
+        console.error(
+            `❌ Failed to connect Twitch account ${account.login}:`,
+            err.response?.data ||
+            err.message ||
+            err
+        );
+
+        clients.delete(
+            account.overlayId
+        );
+    }
+}
+
+function registerEvents(
+    client,
+    account
+) {
+    client.on(
+        "connected",
+        async () => {
+            console.log(
+                `✅ Connected to Twitch: ${account.login}`
+            );
+
+            try {
+                const token =
+                    await axios.post(
+                        "https://id.twitch.tv/oauth2/token",
+                        null,
+                        {
+                            params: {
+                                client_id:
+                                    process.env.TWITCH_CLIENT_ID,
+
+                                client_secret:
+                                    process.env.TWITCH_CLIENT_SECRET,
+
+                                grant_type:
+                                    "client_credentials"
+                            }
+                        }
+                    );
+
+                const appAccessToken =
+                    token.data.access_token;
+
+                const user =
+                    await axios.get(
+                        "https://api.twitch.tv/helix/users",
+                        {
+                            headers: {
+                                Authorization:
+                                    `Bearer ${appAccessToken}`,
+
+                                "Client-Id":
+                                    process.env.TWITCH_CLIENT_ID
+                            },
+
+                            params: {
+                                login:
+                                    account.login
+                            }
+                        }
+                    );
+
+                if (
+                    !user.data.data.length
+                ) {
+                    console.error(
+                        `❌ Could not find Twitch user: ${account.login}`
+                    );
+
+                    return;
+                }
+
+                const broadcasterId =
+                    user.data.data[0].id;
+
+                console.log(
+                    `📺 Broadcaster ${account.login}:`,
+                    broadcasterId
+                );
+
+                bridge.setBroadcasterId(
+                    broadcasterId,
+                    account.overlayId
+                );
+
+                try {
+                    await downloadBadges(
+                        account.login,
+                        account.overlayId
+                    );
+
+                    console.log(
+                        `✅ Channel badges updated: ${account.login}`
+                    );
+
+                } catch (err) {
+                    console.error(
+                        `❌ Failed to update channel badges for ${account.login}:`,
+                        err.message
+                    );
+                }
+
+            } catch (err) {
+                console.error(
+                    `❌ Twitch API error for ${account.login}:`,
+                    err.response?.data ||
+                    err
+                );
+            }
+        }
+    );
+
+    // ============================================
+    // Twitch timeout event
+    // ============================================
+
+    client.on(
+        "timeout",
+        (
+            channel,
+            username,
+            reason,
+            duration,
+            userstate
+        ) => {
+            const userId =
+                userstate?.["user-id"] ||
+                "";
+
+            rememberTimedOutUser(
+                account.overlayId,
+                userId,
+                username,
+                duration
+            );
+
+            console.log(
+                `⏱️ [${account.login}] Timeout detected: ${username} (${duration}s) userId=${userId}`
+            );
+
+            sendTimeoutToOverlay(
+                account,
+                username,
+                userId
+            );
+        }
+    );
+
+    // ============================================
+    // Twitch CLEARCHAT fallback
+    // ============================================
+
+    client.on(
+        "clearchat",
+        (
+            channel,
+            username,
+            userstate
+        ) => {
+            if (!username) return;
+
+            const userId =
+                userstate?.["user-id"] ||
+                "";
+
+            const duration =
+                userstate?.["ban-duration"] ||
+                0;
+
+            rememberTimedOutUser(
+                account.overlayId,
+                userId,
+                username,
+                duration
+            );
+
+            console.log(
+                `🧹 [${account.login}] CLEARCHAT detected: ${username} (${duration || "ban"}) userId=${userId}`
+            );
+
+            sendTimeoutToOverlay(
+                account,
+                username,
+                userId
+            );
+        }
+    );
+
+    // ============================================
+    // Twitch deleted message
+    // ============================================
+
+    client.on(
+        "messagedeleted",
+        (
+            channel,
+            username,
+            deletedMessage,
+            userstate
+        ) => {
+            const messageId =
+                userstate?.["target-msg-id"] ||
+                "";
+
+            if (!messageId) {
+                console.warn(
+                    `⚠️ [${account.login}] Deleted Twitch message had no message ID.`
+                );
+
+                return;
+            }
+
+            console.log(
+                `🗑️ [${account.login}] Twitch message deleted:`,
+                {
+                    username,
+                    messageId
+                }
+            );
+
+            bridge.send({
+                type:
+                    "message_deleted",
+
+                platform:
+                    "twitch",
+
+                overlayId:
+                    account.overlayId,
+
+                messageId
+            });
+        }
+    );
+
+    // ============================================
+    // Twitch chat messages
+    // ============================================
+
+    client.on(
+        "message",
+        async (
+            channel,
+            tags,
+            message,
+            self
+        ) => {
+            if (self) return;
+
+            console.log(
+                `💬 [${account.login}]`,
+                tags["display-name"],
+                message
+            );
+
+            const username = (
+                tags.username ||
+                tags.login ||
+                tags["display-name"] ||
+                ""
+            ).toLowerCase();
+
+            // ========================================
+            // Block timed-out users
+            // ========================================
+
+            if (
+                isUserTimedOut(
+                    account.overlayId,
+                    tags["user-id"],
+                    username
+                )
+            ) {
+                console.log(
+                    `🚫 [${account.login}] Blocking timed-out user: ${username}`
+                );
+
+                return;
+            }
+
+            const trimmedMessage =
+                message.trim();
+
+            // ========================================
+            // Show / Hide commands
+            // ========================================
+
+            if (
+                await bridge.shouldHideCommand(
+                    account.overlayId,
+                    trimmedMessage
+                )
+            ) {
+                console.log(
+                    `🚫 [${account.login}] Hidden Command:`,
+                    trimmedMessage
+                );
+
+                return;
+            }
+
+            // ========================================
+            // Hidden users
+            // ========================================
+
+            if (
+                await bridge.shouldHideUser(
+                    account.overlayId,
+                    username
+                )
+            ) {
+                console.log(
+                    "🚫 Hidden Bot:",
+                    username,
+                    "for overlay:",
+                    account.overlayId
+                );
+
+                return;
+            }
+
+            const sevenTV =
+                await SevenTVCosmetics.get(
+                    tags["user-id"]
+                );
+
+            // ========================================
+            // Send Twitch message to Bridge4K
+            // ========================================
+
+            bridge.send({
+                platform:
+                    "twitch",
+
+                overlayId:
+                    account.overlayId,
+
+                // Twitch message ID
+                messageId:
+                    tags.id || "",
+
+                username:
+                    tags["display-name"],
+
+                color:
+                    getUsernameColor(
+                        tags["display-name"],
+                        tags.color
+                    ),
+
+                text:
+                    message,
+
+                badges:
+                    tags.badges || {},
+
+                emotes:
+                    tags.emotes || {},
+
+                // ====================================
+                // Twitch Tier 2 / Tier 3 GIPHY GIFs
+                // ====================================
+                //
+                // Twitch supplies the GIF metadata in
+                // the IRC "gifs" tag. Preserve the tag
+                // exactly as received. Do not alter
+                // the provided GIF URL.
+                //
+                // The renderer needs to parse this
+                // property and render the GIF.
+
+                gifs:
+                    tags.gifs || "",
+
+                channelId:
+                    account.userId || "",
+
+                userId:
+                    tags["user-id"] || "",
+
+                sevenTV
+            });
+        }
+    );
+}
+
+const DEFAULT_USERNAME_COLORS = [
+    "#FF0000",
+    "#0000FF",
+    "#008000",
+    "#B22222",
+    "#FF7F50",
+    "#9ACD32",
+    "#FF4500",
+    "#2E8B57",
+    "#DAA520",
+    "#D2691E",
+    "#5F9EA0",
+    "#1E90FF",
+    "#FF69B4",
+    "#8A2BE2",
+    "#00FF7F"
+];
+
+function getUsernameColor(
+    username,
+    color
+) {
+    if (color) {
+        return color;
+    }
+
+    let hash = 0;
+
+    for (
+        let i = 0;
+        i < username.length;
+        i++
+    ) {
+        hash =
+            username.charCodeAt(i) +
+            ((hash << 5) - hash);
+    }
+
+    return DEFAULT_USERNAME_COLORS[
+        Math.abs(hash) %
+        DEFAULT_USERNAME_COLORS.length
+    ];
+}
+
+initialize();
 
 module.exports = {
-
-    buildLoginURL,
-
-    decodeState,
-
-    exchangeCode
-
+    initialize
 };
