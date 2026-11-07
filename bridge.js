@@ -2013,75 +2013,36 @@ if (broadcasterId) {
     // Send
     // ============================================================
 
-    send(data) {
+   send(data) {
+    this.emit("message", {
+        type: data.type,
+        platform: data.platform,
+        overlayId: data.overlayId || null,
 
-        this.emit(
-            "message",
-            {
+        username: data.username,
+        color: data.color || null,
+        text: data.text,
 
-                type:
-                    data.type,
+        badges: data.badges || {},
+        emotes: data.emotes || {},
 
-                platform:
-                    data.platform,
+        // Twitch Tier 2 / Tier 3 GIF metadata
+        gifs: data.gifs || [],
 
-                overlayId:
-                    data.overlayId ||
-                    null,
+        channelId: data.channelId || "",
+        userId: data.userId || "",
+        messageId: data.messageId || "",
 
-                username:
-                    data.username,
+        sevenTV: data.sevenTV || {
+            paint: null,
+            badge: null,
+            effects: [],
+            raw: null
+        },
 
-                color:
-    data.color ||
-    null,
-
-                text:
-                    data.text,
-
-                badges:
-                    data.badges ||
-                    {},
-
-                emotes:
-                    data.emotes ||
-                    {},
-
-                channelId:
-                    data.channelId ||
-                    "",
-
-                userId:
-                    data.userId ||
-                    "",
-                userId:
-                    data.userId ||
-                    "",
-
-                messageId:
-                    data.messageId ||
-                    "",
-
-                sevenTV:
-                    data.sevenTV || {
-                        paint: null,
-                        badge: null,
-                        effects: [],
-                        raw: null
-                    },
-                sevenTV:
-                    data.sevenTV || {
-                        paint: null,
-                        badge: null,
-                        effects: [],
-                        raw: null
-                    },
-
-                timestamp:
-                    Date.now()
-            }
-        );
-    }
+        timestamp: Date.now()
+    });
+}
 
     // ============================================================
     // Broadcaster Mapping
